@@ -4,7 +4,6 @@ from flask import Flask, render_template, request, redirect, url_for
 
 app = Flask(__name__)
 
-# Railway define esta variable automáticamente
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
 def get_db():
@@ -15,8 +14,8 @@ def get_db():
 
 @app.route("/")
 def index():
-    db = get_db()
-    cur = db.cursor()
+    conn = get_db()
+    cur = conn.cursor()
 
     cur.execute("SELECT id, name, points FROM teams ORDER BY id")
     teams = cur.fetchall()
@@ -24,13 +23,13 @@ def index():
     cur.execute("""
         SELECT m.id, t.name, m.points, m.created_at
         FROM matches m
-        JOIN teams t ON m.team_id = t.id
+        JOIN teams t ON t.id = m.team_id
         ORDER BY m.created_at DESC
     """)
     matches = cur.fetchall()
 
     cur.close()
-    db.close()
+    conn.close()
 
     return render_template(
         "index.html",
@@ -41,40 +40,36 @@ def index():
 @app.route("/add_team", methods=["POST"])
 def add_team():
     name = request.form.get("name", "").strip()
-
     if not name:
         return redirect(url_for("index"))
 
-    db = get_db()
-    cur = db.cursor()
+    conn = get_db()
+    cur = conn.cursor()
 
     cur.execute(
         "INSERT INTO teams (name) VALUES (%s)",
         (name,)
     )
 
-    db.commit()
+    conn.commit()
     cur.close()
-    db.close()
+    conn.close()
 
     return redirect(url_for("index"))
 
 @app.route("/add_match", methods=["POST"])
 def add_match():
-    team_id = request.form.get("team_id")
-    points = request.form.get("points")
-
     try:
-        points = int(points)
-        team_id = int(team_id)
+        team_id = int(request.form.get("team_id"))
+        points = int(request.form.get("points"))
     except (TypeError, ValueError):
         return redirect(url_for("index"))
 
     if points <= 0:
         return redirect(url_for("index"))
 
-    db = get_db()
-    cur = db.cursor()
+    conn = get_db()
+    cur = conn.cursor()
 
     cur.execute(
         "INSERT INTO matches (team_id, points) VALUES (%s, %s)",
@@ -86,16 +81,19 @@ def add_match():
         (points, team_id)
     )
 
-    db.commit()
+    conn.commit()
     cur.close()
-    db.close()
+    conn.close()
 
     return redirect(url_for("index"))
 
-# NO hooks, NO init_db, NO before_first_request
-# Gunicorn importa simplemente `app`
+# IMPORTANTE:
+# ❌ NO before_first_request
+# ❌ NO init_db
+# ✅ Compatible Flask 3 / Python 3.13 / Railway / Gunicorn
 
 if __name__ == "__main__":
     app.run()
+
 
 
