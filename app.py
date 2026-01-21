@@ -1,16 +1,20 @@
 import os
+import uuid
 import psycopg2
 from flask import Flask, render_template, request, redirect, url_for
 
 app = Flask(__name__)
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
+UPLOAD_FOLDER = "uploads"
+
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL no está definida")
+
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 def get_db():
-    return psycopg2.connect(
-        DATABASE_URL,
-        sslmode="require"
-    )
+    return psycopg2.connect(DATABASE_URL, sslmode="require")
 
 @app.route("/")
 def index():
@@ -21,7 +25,7 @@ def index():
     teams = cur.fetchall()
 
     cur.execute("""
-        SELECT m.id, t.name, m.points, m.created_at
+        SELECT m.id, t.name, m.points, m.created_at, m.image_path
         FROM matches m
         JOIN teams t ON t.id = m.team_id
         ORDER BY m.created_at DESC
@@ -31,11 +35,7 @@ def index():
     cur.close()
     conn.close()
 
-    return render_template(
-        "index.html",
-        teams=teams,
-        matches=matches
-    )
+    return render_template("index.html", teams=teams, matches=matches)
 
 @app.route("/add_team", methods=["POST"])
 def add_team():
@@ -45,12 +45,7 @@ def add_team():
 
     conn = get_db()
     cur = conn.cursor()
-
-    cur.execute(
-        "INSERT INTO teams (name) VALUES (%s)",
-        (name,)
-    )
-
+    cur.execute("INSERT INTO teams (name) VALUES (%s)", (name,))
     conn.commit()
     cur.close()
     conn.close()
@@ -65,21 +60,26 @@ def add_match():
     except (TypeError, ValueError):
         return redirect(url_for("index"))
 
-    if points <= 0:
-        return redirect(url_for("index"))
+    image = request.files.get("image")
+    image_path = None
+
+    if image and image.filename:
+        ext = image.filename.rsplit(".", 1)[-1].lower()
+        filename = f"{uuid.uuid4()}.{ext}"
+        image_path = f"{UPLOAD_FOLDER}/{filename}"
+        image.save(image_path)
 
     conn = get_db()
     cur = conn.cursor()
 
-    cur.execute(
-        "INSERT INTO matches (team_id, points) VALUES (%s, %s)",
-        (team_id, points)
-    )
+    cur.execute("""
+        INSERT INTO matches (team_id, points, image_path)
+        VALUES (%s, %s, %s)
+    """, (team_id, points, image_path))
 
-    cur.execute(
-        "UPDATE teams SET points = points + %s WHERE id = %s",
-        (points, team_id)
-    )
+    cur.execute("""
+        UPDATE teams SET points = points + %s WHERE id = %s
+    """, (points, team_id))
 
     conn.commit()
     cur.close()
@@ -87,13 +87,14 @@ def add_match():
 
     return redirect(url_for("index"))
 
-# IMPORTANTE:
-# ❌ NO before_first_request
-# ❌ NO init_db
-# ✅ Compatible Flask 3 / Python 3.13 / Railway / Gunicorn
+@app.route("/uploads/<filename>")
+def uploaded_file(filename):
+    return app.send_static_file(f"../uploads/{filename}")
 
 if __name__ == "__main__":
     app.run()
+
+
 
 
 
