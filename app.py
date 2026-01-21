@@ -33,6 +33,10 @@ def init_db():
     cur.close()
     db.close()
 
+@app.before_first_request
+def start():
+    init_db()
+
 @app.route("/")
 def index():
     db = get_db()
@@ -84,7 +88,3 @@ def add_match():
     db.close()
 
     return redirect("/")
-
-if __name__ == "__main__":
-    init_db()
-    app.run()
