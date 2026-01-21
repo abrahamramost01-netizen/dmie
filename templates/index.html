@@ -1,31 +1,91 @@
-<h1>Dominó doble 9</h1>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Dominó – Control de partidas</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+        h1, h2 {
+            margin-top: 30px;
+        }
+        form {
+            background: white;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 6px;
+        }
+        input, select, button {
+            margin: 5px 0;
+            padding: 8px;
+        }
+        .card {
+            background: white;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 6px;
+        }
+        img {
+            margin-top: 10px;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
 
-<h2>Equipos</h2>
-<ul>
-  {% for t in teams %}
-    <li>{{ t[1] }} – {{ t[2] }} puntos</li>
-  {% endfor %}
-</ul>
+<h1>🁢 Dominó – Control de partidas</h1>
 
+<!-- CREAR EQUIPO -->
+<h2>Crear equipo</h2>
 <form method="post" action="/add_team">
-  <input name="name" placeholder="Nombre del equipo" required>
-  <button>Crear equipo</button>
+    <input type="text" name="name" placeholder="Nombre del equipo" required>
+    <button type="submit">Crear</button>
 </form>
 
-<h2>Nueva partida</h2>
-<form method="post" action="/add_match">
-  <select name="team_id">
-    {% for t in teams %}
-      <option value="{{ t[0] }}">{{ t[1] }}</option>
-    {% endfor %}
-  </select>
-  <input name="points" type="number" placeholder="Puntos del perdedor" required>
-  <button>Guardar partida</button>
+<!-- LISTA DE EQUIPOS -->
+<h2>Equipos</h2>
+{% for t in teams %}
+    <div class="card">
+        <strong>{{ t[1] }}</strong><br>
+        Puntos: {{ t[2] }}
+    </div>
+{% endfor %}
+
+<!-- AÑADIR PARTIDA -->
+<h2>Añadir partida</h2>
+<form method="post" action="/add_match" enctype="multipart/form-data">
+    <select name="team_id" required>
+        <option value="">Equipo perdedor</option>
+        {% for t in teams %}
+            <option value="{{ t[0] }}">{{ t[1] }}</option>
+        {% endfor %}
+    </select>
+    <br>
+    <input type="number" name="points" placeholder="Puntos (solo pierde)" required>
+    <br>
+    <input type="file" name="image" accept="image/*">
+    <br>
+    <button type="submit">Guardar partida</button>
 </form>
 
-<h2>Historial</h2>
-<ul>
-  {% for m in matches %}
-    <li>Equipo {{ m[1] }} +{{ m[2] }} puntos</li>
-  {% endfor %}
-</ul>
+<!-- HISTORIAL -->
+<h2>Historial de partidas</h2>
+{% for m in matches %}
+    <div class="card">
+        <strong>Equipo:</strong> {{ m[1] }}<br>
+        <strong>Puntos:</strong> {{ m[2] }}<br>
+        <small>{{ m[3] }}</small>
+
+        {% if m[4] %}
+            <br>
+            <img src="/{{ m[4] }}" width="250">
+        {% endif %}
+    </div>
+{% endfor %}
+
+</body>
+</html>
+
