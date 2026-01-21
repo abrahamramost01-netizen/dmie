@@ -1,0 +1,31 @@
+<h1>Dominó doble 9</h1>
+
+<h2>Equipos</h2>
+<ul>
+  {% for t in teams %}
+    <li>{{ t[1] }} – {{ t[2] }} puntos</li>
+  {% endfor %}
+</ul>
+
+<form method="post" action="/add_team">
+  <input name="name" placeholder="Nombre del equipo" required>
+  <button>Crear equipo</button>
+</form>
+
+<h2>Nueva partida</h2>
+<form method="post" action="/add_match">
+  <select name="team_id">
+    {% for t in teams %}
+      <option value="{{ t[0] }}">{{ t[1] }}</option>
+    {% endfor %}
+  </select>
+  <input name="points" type="number" placeholder="Puntos del perdedor" required>
+  <button>Guardar partida</button>
+</form>
+
+<h2>Historial</h2>
+<ul>
+  {% for m in matches %}
+    <li>Equipo {{ m[1] }} +{{ m[2] }} puntos</li>
+  {% endfor %}
+</ul>
