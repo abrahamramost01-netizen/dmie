@@ -4,7 +4,7 @@ from flask import Flask, render_template, request, redirect, url_for
 
 app = Flask(__name__)
 
-# Railway proporciona esta variable automáticamente
+# Railway define esta variable automáticamente
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
 def get_db():
@@ -40,9 +40,9 @@ def index():
 
 @app.route("/add_team", methods=["POST"])
 def add_team():
-    name = request.form["name"].strip()
+    name = request.form.get("name", "").strip()
 
-    if name == "":
+    if not name:
         return redirect(url_for("index"))
 
     db = get_db()
@@ -61,12 +61,13 @@ def add_team():
 
 @app.route("/add_match", methods=["POST"])
 def add_match():
-    team_id = request.form["team_id"]
-    points = request.form["points"]
+    team_id = request.form.get("team_id")
+    points = request.form.get("points")
 
     try:
         points = int(points)
-    except ValueError:
+        team_id = int(team_id)
+    except (TypeError, ValueError):
         return redirect(url_for("index"))
 
     if points <= 0:
@@ -75,13 +76,11 @@ def add_match():
     db = get_db()
     cur = db.cursor()
 
-    # Guardar la partida
     cur.execute(
         "INSERT INTO matches (team_id, points) VALUES (%s, %s)",
         (team_id, points)
     )
 
-    # Sumar puntos al equipo
     cur.execute(
         "UPDATE teams SET points = points + %s WHERE id = %s",
         (points, team_id)
@@ -92,6 +91,9 @@ def add_match():
     db.close()
 
     return redirect(url_for("index"))
+
+# NO hooks, NO init_db, NO before_first_request
+# Gunicorn importa simplemente `app`
 
 if __name__ == "__main__":
     app.run()
