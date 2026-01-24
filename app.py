@@ -4,6 +4,7 @@ import base64
 import psycopg2
 from flask import Flask, render_template, request, redirect, url_for, send_from_directory
 from openai import OpenAI
+
 WIN_POINTS = 200
 app = Flask(__name__)
 
@@ -14,12 +15,10 @@ UPLOAD_FOLDER = "uploads"
 
 if not DATABASE_URL:
     raise RuntimeError("DATABASE_URL no está definida")
-
 if not OPENAI_API_KEY:
     raise RuntimeError("OPENAI_API_KEY no está definida")
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 # ================= DB =================
@@ -64,11 +63,9 @@ def calcular_puntos_domino(image_path: str) -> int:
     )
 
     try:
-        puntos = int(response.choices[0].message.content.strip())
-    except:
-        puntos = 0
-
-    return puntos
+        return int(response.choices[0].message.content.strip())
+    except Exception:
+        return 0
 
 # ================= RUTAS =================
 @app.route("/")
@@ -90,13 +87,12 @@ def index():
     cur.close()
     conn.close()
 
-   return render_template(
-    "index.html",
-    teams=teams,
-    matches=matches,
-    win_points=WIN_POINTS
-)
-
+    return render_template(
+        "index.html",
+        teams=teams,
+        matches=matches,
+        win_points=WIN_POINTS
+    )
 
 @app.route("/add_team", methods=["POST"])
 def add_team():
@@ -121,13 +117,11 @@ def add_match():
     if not image or not image.filename:
         return redirect(url_for("index"))
 
-    # Guardar imagen
     ext = image.filename.rsplit(".", 1)[-1].lower()
     filename = f"{uuid.uuid4()}.{ext}"
-    image_path = f"{UPLOAD_FOLDER}/{filename}"
+    image_path = os.path.join(UPLOAD_FOLDER, filename)
     image.save(image_path)
 
-    # 🔥 IA CALCULA LOS PUNTOS
     points = calcular_puntos_domino(image_path)
 
     conn = get_db()
