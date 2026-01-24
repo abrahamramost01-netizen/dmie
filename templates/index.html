@@ -1,107 +1,142 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <title>Dominó</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background: #f4f4f4;
-            padding: 20px;
-        }
-        details {
-            background: #fff;
-            padding: 15px;
-            margin-bottom: 15px;
-            border-radius: 6px;
-        }
-        summary {
-            font-weight: bold;
-            cursor: pointer;
-        }
-        .card {
-            background: #fff;
-            padding: 15px;
-            border-radius: 6px;
-            margin-bottom: 10px;
-        }
-        img {
-            margin-top: 10px;
-            max-width: 250px;
-            border-radius: 4px;
-        }
-    </style>
+<meta charset="UTF-8">
+<title>Dominó</title>
+
+<style>
+body {
+    font-family: Arial, sans-serif;
+    background: #f2f2f2;
+    padding: 20px;
+}
+
+h1 {
+    text-align: center;
+}
+
+.teams {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 15px;
+    margin-bottom: 30px;
+}
+
+.team-card {
+    background: white;
+    border-radius: 8px;
+    padding: 15px;
+    text-align: center;
+    box-shadow: 0 2px 6px rgba(0,0,0,.15);
+}
+
+.team-name {
+    font-size: 20px;
+    font-weight: bold;
+}
+
+.team-points {
+    font-size: 42px;
+    color: #2c7be5;
+    margin: 10px 0;
+}
+
+.team-actions form {
+    margin-top: 5px;
+}
+
+button {
+    padding: 6px 10px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.edit {
+    background: #ffc107;
+}
+
+.delete {
+    background: #dc3545;
+    color: white;
+}
+
+details {
+    background: white;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+</style>
 </head>
+
 <body>
 
-<h1>🁢 Dominó</h1>
+<h1> Dominó</h1>
 
-<!-- EQUIPOS (OCULTO) -->
-<details>
-    <summary>👥 Equipos</summary>
-    {% for t in teams %}
-        <div class="card">
-            {{ t[1] }} – {{ t[2] }} puntos
+<!-- EQUIPOS SIEMPRE VISIBLES -->
+<h2> Equipos</h2>
+<div class="teams">
+{% for t in teams %}
+    <div class="team-card">
+        <div class="team-name">{{ t[1] }}</div>
+        <div class="team-points">{{ t[2] }}</div>
+
+        <div class="team-actions">
+            <!-- EDITAR PUNTOS -->
+            <form method="post" action="/edit_team_points">
+                <input type="hidden" name="team_id" value="{{ t[0] }}">
+                <input type="number" name="points" placeholder="Nuevo puntaje" required>
+                <button class="edit">Editar</button>
+            </form>
+
+            <!-- ELIMINAR -->
+            <form method="post" action="/delete_team"
+                  onsubmit="return confirm('¿Eliminar equipo?');">
+                <input type="hidden" name="team_id" value="{{ t[0] }}">
+                <button class="delete">Eliminar</button>
+            </form>
         </div>
-    {% endfor %}
-</details>
-
-<!-- CREAR EQUIPO (OCULTO) -->
-<details>
-    <summary>➕ Crear equipo</summary>
-    <form method="post" action="/add_team">
-        <input name="name" placeholder="Nombre del equipo" required>
-        <button type="submit">Crear</button>
-    </form>
-</details>
-
-<!-- PARTIDA ACTUAL (SIEMPRE VISIBLE) -->
-<details open>
-    <summary>Partida actual</summary>
-    <form method="post" action="/add_match" enctype="multipart/form-data">
-        <select name="team_id" required>
-            <option value="">seleccione el equipo</option>
-            {% for t in teams %}
-                <option value="{{ t[0] }}">{{ t[1] }}</option>
-            {% endfor %}
-        </select>
-        <br>
-        <input type="number" name="points" placeholder="Puntos" required>
-        <br>
-        <input type="file" name="image" accept="image/*">
-        <br>
-        <button type="submit">actualizar</button>
-    </form>
-</details>
-
-<!-- ÚLTIMA PARTIDA (SIEMPRE VISIBLE) -->
-{% if matches %}
-<h2>Última partida</h2>
-<div class="card">
-    Equipo {{ matches[0][1] }} +{{ matches[0][2] }} puntos
-    {% if matches[0][4] %}
-        <br>
-        <img src="/{{ matches[0][4] }}">
-    {% endif %}
+    </div>
+{% endfor %}
 </div>
-{% endif %}
 
-<!-- HISTORIAL ANTIGUO (OCULTO) -->
+<!-- CREAR EQUIPO -->
 <details>
-    <summary>📜 Historial anterior</summary>
-    {% for m in matches[1:] %}
-        <div class="card">
-            Equipo {{ m[1] }} +{{ m[2] }} puntos
-            {% if m[4] %}
-                <br>
-                <img src="/{{ m[4] }}">
-            {% endif %}
-        </div>
-    {% endfor %}
+<summary>➕ Crear equipo</summary>
+<form method="post" action="/add_team">
+    <input name="name" placeholder="Nombre del equipo" required>
+    <button>Crear</button>
+</form>
+</details>
+
+<!-- PARTIDA ACTUAL -->
+<details open>
+<summary> Partida </summary>
+<form method="post" action="/add_match" enctype="multipart/form-data">
+    <select name="team_id" required>
+        <option value="">elegir equipo</option>
+        {% for t in teams %}
+            <option value="{{ t[0] }}">{{ t[1] }}</option>
+        {% endfor %}
+    </select>
+    <br><br>
+    <input type="number" name="points" placeholder="Puntos" required>
+    <br><br>
+    <input type="file" name="image" accept="image/*">
+    <br><br>
+    <button>actualizar</button>
+</form>
+</details>
+
+<!-- HISTORIAL -->
+<details>
+<summary> Historial</summary>
+{% for m in matches %}
+    <p>Equipo {{ m[1] }} +{{ m[2] }} puntos</p>
+{% endfor %}
 </details>
 
 </body>
 </html>
-
-
 
