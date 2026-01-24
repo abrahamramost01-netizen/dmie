@@ -1,23 +1,31 @@
-# ====== CORE DEPENDENCIES ======
+# ====== CORE ======
 Flask
-Jinja2
-Werkzeug
-
-# ====== DATABASE ======
 psycopg2-binary
+gunicorn
 
-# ====== YOLO + VISION (CPU-ONLY) ======
+# ====== YOLO LITE (sin PyTorch pesado) ======
+# Usar solo las dependencias mínimas
+
 torch
 torchvision
 
 ultralytics
 
+# OpenCV minimal
 opencv-python-headless
 
-# ====== UTILITIES ======
-numpy
-Pillow
+# Dependencias mínimas de torch
+filelock
+typing-extensions
+sympy
+networkx
+jinja2
+fsspec
 
-# ====== PRODUCTION SERVER ======
-gunicorn
+numpy
+pillow
+pyyaml
+requests
+tqdm
+
 
