@@ -11,10 +11,11 @@ body {
     padding: 20px;
 }
 
-h1, h2 {
+h1 {
     text-align: center;
 }
 
+/* ================= EQUIPOS ================= */
 .teams {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -28,19 +29,18 @@ h1, h2 {
     padding: 15px;
     text-align: center;
     box-shadow: 0 2px 6px rgba(0,0,0,.15);
-    transition: transform .3s;
+    position: relative;
 }
 
 .team-card.winner {
-    border: 4px solid #28a745;
-    background: #eafaf1;
-    animation: pulse 1.5s infinite;
+    border: 3px solid #28a745;
+    background: #eaffea;
+    animation: glow 1.5s infinite alternate;
 }
 
-@keyframes pulse {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.03); }
-    100% { transform: scale(1); }
+@keyframes glow {
+    from { box-shadow: 0 0 5px #28a745; }
+    to   { box-shadow: 0 0 18px #28a745; }
 }
 
 .team-name {
@@ -54,42 +54,57 @@ h1, h2 {
     margin: 10px 0;
 }
 
-.matches {
-    background: white;
-    padding: 15px;
-    border-radius: 8px;
+/* ================= BOTONES ================= */
+.team-actions form {
+    margin-top: 6px;
 }
 
-.match {
-    border-bottom: 1px solid #ddd;
-    padding: 10px 0;
+button {
+    padding: 6px 10px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
 }
 
-.match:last-child {
-    border-bottom: none;
+.edit {
+    background: #ffc107;
 }
 
-img {
-    max-width: 100%;
-    border-radius: 6px;
-    margin-top: 8px;
-}
-
-.badge {
-    display: inline-block;
-    background: #28a745;
+.delete {
+    background: #dc3545;
     color: white;
-    padding: 3px 8px;
-    border-radius: 12px;
-    font-size: 12px;
-    margin-left: 5px;
 }
 
+/* ================= SECCIONES ================= */
 details {
     background: white;
     padding: 15px;
     border-radius: 8px;
     margin-bottom: 20px;
+}
+
+/* ================= HISTORIAL ================= */
+.match {
+    border-bottom: 1px solid #ddd;
+    padding: 10px 0;
+}
+
+.match img {
+    max-width: 100%;
+    border-radius: 6px;
+    margin-top: 10px;
+}
+
+.calc {
+    background: #f8f9fa;
+    border-radius: 6px;
+    padding: 10px;
+    margin-top: 10px;
+    font-size: 14px;
+}
+
+.calc ul {
+    margin: 5px 0 0 15px;
 }
 </style>
 </head>
@@ -98,41 +113,66 @@ details {
 
 <h1>🁢 Dominó</h1>
 
+{% set WIN_POINTS = win_points if win_points is defined else 200 %}
+
 <!-- ================= EQUIPOS ================= -->
 <h2>Equipos</h2>
 <div class="teams">
 {% for t in teams %}
-    <div class="team-card {% if t.points >= win_points %}winner{% endif %}">
-        <div class="team-name">
-            {{ t.name }}
-            {% if t.points >= win_points %}
-                <span class="badge">GANADOR</span>
-            {% endif %}
+    <div class="team-card {% if t[2] >= WIN_POINTS %}winner{% endif %}">
+        <div class="team-name">{{ t[1] }}</div>
+        <div class="team-points">{{ t[2] }}</div>
+
+        {% if t[2] >= WIN_POINTS %}
+            <strong>🏆 Ganador</strong>
+        {% endif %}
+
+        <div class="team-actions">
+            <form method="post" action="/edit_team_points">
+                <input type="hidden" name="team_id" value="{{ t[0] }}">
+                <input type="number" name="points" placeholder="Nuevo puntaje" required>
+                <button class="edit">Editar</button>
+            </form>
+
+            <form method="post" action="/delete_team"
+                  onsubmit="return confirm('¿Eliminar este equipo y sus partidas?');">
+                <input type="hidden" name="team_id" value="{{ t[0] }}">
+                <button class="delete">Eliminar</button>
+            </form>
         </div>
-        <div class="team-points">{{ t.points }}</div>
-        <div>🏆 Partidas ganadas: {{ t.wins }}</div>
     </div>
 {% endfor %}
 </div>
 
-<!-- ================= NUEVA PARTIDA ================= -->
+<!-- ================= CREAR EQUIPO ================= -->
+<details>
+<summary>➕ Crear equipo</summary>
+<form method="post" action="/add_team">
+    <input name="name" placeholder="Nombre del equipo" required>
+    <button>Crear</button>
+</form>
+</details>
+
+<!-- ================= PARTIDA ================= -->
 <details open>
 <summary>🎯 Nueva partida</summary>
 <form method="post" action="/add_match" enctype="multipart/form-data">
+
     <select name="team_id" required>
         <option value="">Equipo perdedor</option>
         {% for t in teams %}
-            <option value="{{ t.id }}">{{ t.name }}</option>
+            <option value="{{ t[0] }}">{{ t[1] }}</option>
         {% endfor %}
     </select>
-    <br><br>
 
-    <input type="number" name="points" placeholder="Puntos (opcional)">
     <br><br>
 
     <input type="file" name="image" accept="image/*">
-    <br><br>
+    <p style="font-size:12px;color:#666">
+        (Opcional: foto de fichas para cálculo automático)
+    </p>
 
+    <br>
     <button>Registrar partida</button>
 </form>
 </details>
@@ -141,42 +181,33 @@ details {
 <details>
 <summary>📜 Historial</summary>
 
-<div class="matches">
 {% for m in matches %}
-    <div class="match">
-        <strong>{{ m.team_name }}</strong>
-        +{{ m.points }} puntos
+<div class="match">
+    <strong>{{ m[1] }}</strong> → <b>{{ m[2] }}</b> puntos
+
+    {% if m[3] %}
         <br>
-        <small>{{ m.created_at }}</small>
+        <img src="{{ m[3] }}" alt="Imagen procesada">
+    {% endif %}
 
-        {% if m.image_path %}
-            <div>
-                <b>Imagen original:</b><br>
-                <img src="/{{ m.image_path }}">
-            </div>
-        {% endif %}
-
-        {% if m.processed_image %}
-            <div>
-                <b>Imagen procesada:</b><br>
-                <img src="/{{ m.processed_image }}">
-            </div>
-        {% endif %}
-
-        {% if m.details %}
-            <details>
-                <summary>🧮 Detalle del cálculo</summary>
-                <ul>
-                {% for d in m.details %}
-                    <li>Ficha {{ d.left }} | {{ d.right }} → {{ d.sum }} puntos</li>
-                {% endfor %}
-                </ul>
-                <b>Total:</b> {{ m.points }}
-            </details>
-        {% endif %}
+    {% if m[4] %}
+    <div class="calc">
+        <strong>Detalle del cálculo:</strong>
+        <ul>
+        {% for ficha in m[4].get("fichas", []) %}
+            <li>
+                {{ ficha.lado_a }} + {{ ficha.lado_b }}
+                = {{ ficha.total }}
+            </li>
+        {% endfor %}
+        </ul>
+        <b>Total:</b> {{ m[4].get("total", m[2]) }}
     </div>
-{% endfor %}
+    {% endif %}
 </div>
+{% else %}
+<p>No hay partidas registradas.</p>
+{% endfor %}
 
 </details>
 
