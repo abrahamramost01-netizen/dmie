@@ -4,7 +4,7 @@ import base64
 import psycopg2
 from flask import Flask, render_template, request, redirect, url_for, send_from_directory
 from openai import OpenAI
-
+WIN_POINTS = 200
 app = Flask(__name__)
 
 # ================= CONFIG =================
@@ -90,7 +90,13 @@ def index():
     cur.close()
     conn.close()
 
-    return render_template("index.html", teams=teams, matches=matches)
+   return render_template(
+    "index.html",
+    teams=teams,
+    matches=matches,
+    win_points=WIN_POINTS
+)
+
 
 @app.route("/add_team", methods=["POST"])
 def add_team():
@@ -151,6 +157,7 @@ def uploads(filename):
 # ================= MAIN =================
 if __name__ == "__main__":
     app.run(debug=True)
+
 
 
 
