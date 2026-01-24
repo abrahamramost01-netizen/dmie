@@ -1,18 +1,17 @@
 import os
 import uuid
 import json
-import base64
-import hashlib
+import time
 import psycopg2
 from flask import Flask, render_template, request, redirect, url_for, send_from_directory
 from openai import OpenAI
 
 # ================= CONFIG =================
-app = Flask(__name__)
-UPLOAD_FOLDER = "uploads"
 WIN_POINTS = 200
 MAX_RETRIES = 3
+UPLOAD_FOLDER = "uploads"
 
+app = Flask(__name__)
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
@@ -20,9 +19,6 @@ OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 
 if not DATABASE_URL:
     raise RuntimeError("DATABASE_URL no definida")
-
-if not OPENAI_API_KEY:
-    raise RuntimeError("OPENAI_API_KEY no definida")
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
@@ -32,41 +28,27 @@ def get_db():
 
 # ================= IA DOMINÓ =================
 def calcular_puntos_domino(image_path):
-    """
-    Devuelve:
-    {
-      total: int,
-      fichas: [{a,b,suma,x,y,w,h}],
-      intentos: int
-    }
-    """
-
-    with open(image_path, "rb") as f:
-        image_bytes = f.read()
-
-    image_hash = hashlib.sha256(image_bytes).hexdigest()
-
     conn = get_db()
     cur = conn.cursor()
 
-    # 🔹 CACHE
+    # ✅ CACHE POR image_path
     cur.execute(
-        "SELECT details FROM matches WHERE image_hash = %s LIMIT 1",
-        (image_hash,)
+        "SELECT details FROM matches WHERE image_path = %s AND details IS NOT NULL LIMIT 1",
+        (image_path,)
     )
-    row = cur.fetchone()
-    if row:
+    cached = cur.fetchone()
+    if cached:
         cur.close()
         conn.close()
-        return json.loads(row[0])
-
-    image_b64 = base64.b64encode(image_bytes).decode()
-    image_data_url = f"data:image/jpeg;base64,{image_b64}"
+        return json.loads(cached[0])
 
     last_error = None
 
-    for intento in range(1, MAX_RETRIES + 1):
+    for _ in range(MAX_RETRIES):
         try:
+            with open(image_path, "rb") as f:
+                img_bytes = f.read()
+
             response = client.responses.create(
                 model="gpt-4.1-mini",
                 input=[{
@@ -75,24 +57,17 @@ def calcular_puntos_domino(image_path):
                         {
                             "type": "input_text",
                             "text": (
-                                "Analiza una imagen de fichas de dominó DOBLE 9.\n"
-                                "Reglas IMPORTANTES:\n"
-                                "- Cada ficha tiene dos valores entre 0 y 9\n"
-                                "- Puede haber fichas juntas o tocándose\n"
-                                "- No inventes fichas\n"
-                                "- Devuelve JSON ESTRICTO\n\n"
-                                "Formato:\n"
-                                "{\n"
-                                "  \"total\": number,\n"
-                                "  \"fichas\": [\n"
-                                "    {\"a\":int,\"b\":int,\"suma\":int,\"x\":int,\"y\":int,\"w\":int,\"h\":int}\n"
-                                "  ]\n"
-                                "}"
+                                "Analiza esta imagen de fichas de dominó DOBLE 9.\n"
+                                "Detecta TODAS las fichas visibles, incluso si están juntas.\n"
+                                "Para cada ficha indica: valores (lado A y B) y suma.\n"
+                                "Devuelve JSON EXACTO con este formato:\n"
+                                "{ total: number, fichas: [ { a:number, b:number, suma:number } ] }\n"
+                                "NO inventes fichas."
                             )
                         },
                         {
                             "type": "input_image",
-                            "image_url": image_data_url
+                            "image_base64": img_bytes
                         }
                     ]
                 }]
@@ -100,14 +75,13 @@ def calcular_puntos_domino(image_path):
 
             text = response.output_text
             data = json.loads(text)
-            data["intentos"] = intento
-
             cur.close()
             conn.close()
             return data
 
         except Exception as e:
             last_error = str(e)
+            time.sleep(1)
 
     cur.close()
     conn.close()
@@ -159,51 +133,47 @@ def add_match():
     team_id = int(request.form.get("team_id"))
     image = request.files.get("image")
 
-    if not image or not image.filename:
+    if not image:
         return redirect(url_for("index"))
 
-    filename = f"{uuid.uuid4()}.jpg"
-    image_path = os.path.join(UPLOAD_FOLDER, filename)
+    ext = image.filename.rsplit(".", 1)[-1].lower()
+    filename = f"{uuid.uuid4()}.{ext}"
+    image_path = f"{UPLOAD_FOLDER}/{filename}"
     image.save(image_path)
 
     resultado = calcular_puntos_domino(image_path)
-    total = resultado["total"]
+    points = resultado["total"]
+    details_json = json.dumps(resultado, ensure_ascii=False)
 
     conn = get_db()
     cur = conn.cursor()
 
     cur.execute("""
-        INSERT INTO matches (team_id, points, image_path, details, image_hash)
-        VALUES (%s, %s, %s, %s, %s)
-    """, (
-        team_id,
-        total,
-        image_path,
-        json.dumps(resultado),
-        hashlib.sha256(open(image_path, "rb").read()).hexdigest()
-    ))
+        INSERT INTO matches (team_id, points, image_path, details)
+        VALUES (%s, %s, %s, %s)
+    """, (team_id, points, image_path, details_json))
 
     cur.execute("""
         UPDATE teams SET points = points + %s WHERE id = %s
-    """, (total, team_id))
+    """, (points, team_id))
+
+    # 🏆 Reset automático
+    cur.execute("SELECT id FROM teams WHERE points >= %s", (WIN_POINTS,))
+    if cur.fetchone():
+        cur.execute("UPDATE teams SET points = 0")
 
     conn.commit()
     cur.close()
     conn.close()
-
     return redirect(url_for("index"))
 
-@app.route("/uploads/<path:filename>")
+@app.route("/uploads/<filename>")
 def uploads(filename):
     return send_from_directory(UPLOAD_FOLDER, filename)
 
-# ================= MAIN =================
+# ================= RUN =================
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8080)
-
-
-
-
+    app.run()
 
 
 
