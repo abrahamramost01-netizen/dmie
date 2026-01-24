@@ -98,7 +98,17 @@ details {
         <input type="password" name="password" placeholder="Contraseña" required>
         <button class="primary">Entrar</button>
     </form>
+
+    <hr>
+
+    <h3>Registrarse</h3>
+    <form method="post" action="/register">
+        <input name="username" placeholder="Nuevo usuario" required>
+        <input type="password" name="password" placeholder="Contraseña" required>
+        <button class="primary">Crear cuenta</button>
+    </form>
 </div>
+
 
 {% else %}
 
@@ -180,5 +190,6 @@ details {
 
 </body>
 </html>
+
 
 
