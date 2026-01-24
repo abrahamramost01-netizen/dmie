@@ -1,83 +1,74 @@
 import os
 import uuid
-import base64
 import psycopg2
 from flask import Flask, render_template, request, redirect, url_for, send_from_directory
 from openai import OpenAI
 
-app = Flask(__name__)
-WIN_POINTS = 200
-
 # ================= CONFIG =================
-DATABASE_URL = os.environ.get("DATABASE_URL")
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+app = Flask(__name__)
 UPLOAD_FOLDER = "uploads"
-
-if not DATABASE_URL:
-    raise RuntimeError("DATABASE_URL no está definida")
-
-if not OPENAI_API_KEY:
-    raise RuntimeError("OPENAI_API_KEY no está definida")
+WIN_POINTS = 200
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-client = OpenAI(api_key=OPENAI_API_KEY)
+DATABASE_URL = os.environ.get("DATABASE_URL")
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL no está definida")
+
+client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
 # ================= DB =================
 def get_db():
     return psycopg2.connect(DATABASE_URL, sslmode="require")
 
-# ================= IA DOMINÓ =================
+# ================= IA – CONTAR PUNTOS DOMINÓ =================
 def calcular_puntos_domino(image_path: str) -> int:
     """
-    Envía la imagen a OpenAI Vision y devuelve los puntos detectados.
+    Usa IA para contar puntos de dominó doble-9.
+    Considera fichas juntas y suma TODOS los lados visibles.
     """
     with open(image_path, "rb") as f:
-        image_base64 = base64.b64encode(f.read()).decode("utf-8")
+        image_bytes = f.read()
 
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {
-                "role": "system",
-                "content": (
-                    "Eres un árbitro experto en dominó. "
-                    "Recibirás una foto con fichas de dominó visibles. "
-                    "Debes calcular la suma total de puntos. "
-                    "Devuelve SOLO un número entero. "
-                    "No expliques nada."
-                )
-            },
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": "Calcula los puntos de esta jugada de dominó"},
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:image/jpeg;base64,{image_base64}"
-                        }
-                    }
-                ]
-            }
-        ],
-        max_tokens=10
+    response = client.responses.create(
+        model="gpt-4.1-mini",
+        input=[{
+            "role": "user",
+            "content": [
+                {
+                    "type": "input_text",
+                    "text": (
+                        "Esta imagen contiene fichas de dominó DOBLE-9. "
+                        "Las fichas pueden estar juntas o tocándose. "
+                        "Detecta TODAS las fichas visibles. "
+                        "Cada ficha tiene dos lados con puntos (0 a 9). "
+                        "Suma TODOS los puntos de TODAS las fichas. "
+                        "Devuelve SOLO un número entero. Nada más."
+                    )
+                },
+                {
+                    "type": "input_image",
+                    "image_base64": image_bytes
+                }
+            ]
+        }]
     )
 
+    texto = response.output_text.strip()
+
+    # Seguridad: solo números
     try:
-        puntos = int(response.choices[0].message.content.strip())
+        return int("".join(c for c in texto if c.isdigit()))
     except:
-        puntos = 0
+        return 0
 
-    return puntos
-
-# ================= RUTAS =================
+# ================= ROUTES =================
 @app.route("/")
 def index():
     conn = get_db()
     cur = conn.cursor()
 
-    cur.execute("SELECT id, name, points FROM teams ORDER BY id")
+    cur.execute("SELECT id, name, points, wins FROM teams ORDER BY id")
     teams = cur.fetchall()
 
     cur.execute("""
@@ -92,12 +83,11 @@ def index():
     conn.close()
 
     return render_template(
-    "index.html",
-    teams=teams,
-    matches=matches,
-    win_points=WIN_POINTS
-)
-
+        "index.html",
+        teams=teams,
+        matches=matches,
+        win_points=WIN_POINTS
+    )
 
 @app.route("/add_team", methods=["POST"])
 def add_team():
@@ -107,43 +97,56 @@ def add_team():
 
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("INSERT INTO teams (name) VALUES (%s)", (name,))
+    cur.execute(
+        "INSERT INTO teams (name, points, wins) VALUES (%s, 0, 0)",
+        (name,)
+    )
     conn.commit()
     cur.close()
     conn.close()
-
     return redirect(url_for("index"))
 
 @app.route("/add_match", methods=["POST"])
 def add_match():
     team_id = int(request.form.get("team_id"))
+
     image = request.files.get("image")
+    points = 0
+    image_path = None
 
-    if not image or not image.filename:
-        return redirect(url_for("index"))
+    # ================= FOTO + IA =================
+    if image and image.filename:
+        ext = image.filename.rsplit(".", 1)[-1].lower()
+        filename = f"{uuid.uuid4()}.{ext}"
+        image_path = f"{UPLOAD_FOLDER}/{filename}"
+        image.save(image_path)
 
-    # Guardar imagen
-    ext = image.filename.rsplit(".", 1)[-1].lower()
-    filename = f"{uuid.uuid4()}.{ext}"
-    image_path = f"{UPLOAD_FOLDER}/{filename}"
-    image.save(image_path)
-
-    # 🔥 IA CALCULA LOS PUNTOS
-    points = calcular_puntos_domino(image_path)
+        points = calcular_puntos_domino(image_path)
 
     conn = get_db()
     cur = conn.cursor()
 
-    cur.execute("""
-        INSERT INTO matches (team_id, points, image_path)
-        VALUES (%s, %s, %s)
-    """, (team_id, points, image_path))
+    # Guardar partida
+    cur.execute(
+        "INSERT INTO matches (team_id, points, image_path) VALUES (%s, %s, %s)",
+        (team_id, points, image_path)
+    )
 
-    cur.execute("""
-        UPDATE teams
-        SET points = points + %s
-        WHERE id = %s
-    """, (points, team_id))
+    # Sumar puntos
+    cur.execute(
+        "UPDATE teams SET points = points + %s WHERE id = %s",
+        (points, team_id)
+    )
+
+    # Verificar victoria
+    cur.execute("SELECT points FROM teams WHERE id = %s", (team_id,))
+    total = cur.fetchone()[0]
+
+    if total >= WIN_POINTS:
+        # sumar victoria y resetear
+        cur.execute(
+            "UPDATE teams SET wins = wins + 1, points = 0"
+        )
 
     conn.commit()
     cur.close()
@@ -155,7 +158,8 @@ def add_match():
 def uploads(filename):
     return send_from_directory(UPLOAD_FOLDER, filename)
 
-# ================= MAIN =================
+# ================= RUN =================
 if __name__ == "__main__":
     app.run(debug=True)
+
 
