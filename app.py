@@ -40,8 +40,11 @@ def index():
 
 
 # ================= LOGIN =================
-@app.route("/login", methods=["POST"])
+@app.route("/login", methods=["GET", "POST"])
 def login():
+    if request.method == "GET":
+        return redirect("/")
+
     username = request.form["username"]
     password = request.form["password"]
 
@@ -178,3 +181,4 @@ def add_match():
 # ================= RUN =================
 if __name__ == "__main__":
     app.run(debug=True)
+
