@@ -1,14 +1,10 @@
 import os
 import psycopg2
-from flask import Flask, render_template, request, redirect
-from werkzeug.utils import secure_filename
+from flask import Flask, render_template, request, redirect, abort
 
 app = Flask(__name__)
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
-
-UPLOAD_FOLDER = "static/uploads"
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 def get_db():
     return psycopg2.connect(DATABASE_URL, sslmode="require")
@@ -38,10 +34,21 @@ def index():
 
 @app.route("/add_team", methods=["POST"])
 def add_team():
-    name = request.form["name"]
+    name = request.form.get("name", "").strip()
+
+    if not name:
+        abort(400)
 
     conn = get_db()
     cur = conn.cursor()
+
+    # evitar nombres duplicados
+    cur.execute("SELECT 1 FROM teams WHERE LOWER(name)=LOWER(%s)", (name,))
+    if cur.fetchone():
+        cur.close()
+        conn.close()
+        return redirect("/")
+
     cur.execute(
         "INSERT INTO teams (name, points) VALUES (%s, 0)",
         (name,)
@@ -54,15 +61,23 @@ def add_team():
 
 @app.route("/edit_team_points", methods=["POST"])
 def edit_team_points():
-    team_id = request.form["team_id"]
-    points = request.form["points"]
+    try:
+        team_id = int(request.form["team_id"])
+        points = int(request.form["points"])
+    except:
+        abort(400)
+
+    if points < 0:
+        return redirect("/")
 
     conn = get_db()
     cur = conn.cursor()
+
     cur.execute(
-        "UPDATE teams SET points = %s WHERE id = %s",
+        "UPDATE teams SET points=%s WHERE id=%s",
         (points, team_id)
     )
+
     conn.commit()
     cur.close()
     conn.close()
@@ -71,14 +86,16 @@ def edit_team_points():
 
 @app.route("/delete_team", methods=["POST"])
 def delete_team():
-    team_id = request.form["team_id"]
+    try:
+        team_id = int(request.form["team_id"])
+    except:
+        abort(400)
 
     conn = get_db()
     cur = conn.cursor()
 
-    # borrar partidas del equipo primero
-    cur.execute("DELETE FROM matches WHERE team_id = %s", (team_id,))
-    cur.execute("DELETE FROM teams WHERE id = %s", (team_id,))
+    cur.execute("DELETE FROM matches WHERE team_id=%s", (team_id,))
+    cur.execute("DELETE FROM teams WHERE id=%s", (team_id,))
 
     conn.commit()
     cur.close()
@@ -90,18 +107,30 @@ def delete_team():
 
 @app.route("/add_match", methods=["POST"])
 def add_match():
-    team_id = request.form["team_id"]
-    points = request.form["points"]
+    try:
+        team_id = int(request.form["team_id"])
+        points = int(request.form["points"])
+    except:
+        abort(400)
+
+    if points <= 0:
+        return redirect("/")
 
     conn = get_db()
     cur = conn.cursor()
+
+    # verificar equipo existe
+    cur.execute("SELECT 1 FROM teams WHERE id=%s", (team_id,))
+    if not cur.fetchone():
+        cur.close()
+        conn.close()
+        abort(400)
 
     cur.execute(
         "INSERT INTO matches (team_id, points) VALUES (%s, %s)",
         (team_id, points)
     )
 
-    # sumar puntos al equipo
     cur.execute(
         "UPDATE teams SET points = points + %s WHERE id = %s",
         (points, team_id)
@@ -115,7 +144,4 @@ def add_match():
 
 if __name__ == "__main__":
     app.run(debug=True)
-
-
-
 
