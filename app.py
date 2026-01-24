@@ -1,6 +1,6 @@
 import os
 import psycopg2
-from flask import Flask, render_template, request, redirect, abort
+from flask import Flask, render_template, request, redirect
 
 app = Flask(__name__)
 
@@ -9,6 +9,7 @@ DATABASE_URL = os.environ.get("DATABASE_URL")
 def get_db():
     return psycopg2.connect(DATABASE_URL, sslmode="require")
 
+# ===================== HOME =====================
 @app.route("/")
 def index():
     conn = get_db()
@@ -30,109 +31,107 @@ def index():
 
     return render_template("index.html", teams=teams, matches=matches)
 
-# ---------- EQUIPOS ----------
-
+# ===================== CREAR EQUIPO =====================
 @app.route("/add_team", methods=["POST"])
 def add_team():
-    name = request.form.get("name", "").strip()
-    if not name:
-        abort(400)
+    name = request.form["name"]
 
     conn = get_db()
     cur = conn.cursor()
-
-    cur.execute("SELECT 1 FROM teams WHERE LOWER(name)=LOWER(%s)", (name,))
-    if cur.fetchone():
-        cur.close()
-        conn.close()
-        return redirect("/")
-
     cur.execute(
         "INSERT INTO teams (name, points, wins) VALUES (%s, 0, 0)",
         (name,)
     )
-
     conn.commit()
     cur.close()
     conn.close()
+
     return redirect("/")
 
+# ===================== EDITAR PUNTOS =====================
 @app.route("/edit_team_points", methods=["POST"])
 def edit_team_points():
-    team_id = int(request.form["team_id"])
+    team_id = request.form["team_id"]
     points = int(request.form["points"])
 
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("UPDATE teams SET points=%s WHERE id=%s", (points, team_id))
+
+    # Si llega a 200 o más → gana partida y se reinicia
+    if points >= 200:
+        cur.execute("""
+            UPDATE teams
+            SET points = 0,
+                wins = wins + 1
+            WHERE id = %s
+        """, (team_id,))
+    else:
+        cur.execute("""
+            UPDATE teams
+            SET points = %s
+            WHERE id = %s
+        """, (points, team_id))
+
     conn.commit()
     cur.close()
     conn.close()
+
     return redirect("/")
 
+# ===================== ELIMINAR EQUIPO =====================
 @app.route("/delete_team", methods=["POST"])
 def delete_team():
-    team_id = int(request.form["team_id"])
+    team_id = request.form["team_id"]
 
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("DELETE FROM matches WHERE team_id=%s", (team_id,))
-    cur.execute("DELETE FROM teams WHERE id=%s", (team_id,))
+
+    cur.execute("DELETE FROM matches WHERE team_id = %s", (team_id,))
+    cur.execute("DELETE FROM teams WHERE id = %s", (team_id,))
+
     conn.commit()
     cur.close()
     conn.close()
+
     return redirect("/")
 
-# ---------- PARTIDAS ----------
-
+# ===================== AGREGAR PARTIDA =====================
 @app.route("/add_match", methods=["POST"])
 def add_match():
-    team_id = int(request.form["team_id"])
+    team_id = request.form["team_id"]
     points = int(request.form["points"])
 
     conn = get_db()
     cur = conn.cursor()
 
-    # guardar partida
+    # Guardar historial
     cur.execute(
         "INSERT INTO matches (team_id, points) VALUES (%s, %s)",
         (team_id, points)
     )
 
-    # sumar puntos
+    # Actualizar puntos del equipo
     cur.execute(
-        "UPDATE teams SET points = points + %s WHERE id = %s RETURNING points",
+        "UPDATE teams SET points = points + %s WHERE id = %s",
         (points, team_id)
     )
 
-    new_points = cur.fetchone()[0]
+    # Verificar si llegó a 200
+    cur.execute("SELECT points FROM teams WHERE id = %s", (team_id,))
+    total = cur.fetchone()[0]
 
-    # si llega a 200 → gana partida y resetea
-    if new_points >= 200:
-        cur.execute(
-            "UPDATE teams SET wins = wins + 1, points = 0 WHERE id = %s",
-            (team_id,)
-        )
+    if total >= 200:
+        cur.execute("""
+            UPDATE teams
+            SET points = 0,
+                wins = wins + 1
+            WHERE id = %s
+        """, (team_id,))
 
     conn.commit()
     cur.close()
     conn.close()
+
     return redirect("/")
 
-# ---------- RESET MANUAL ----------
-
-@app.route("/reset_team", methods=["POST"])
-def reset_team():
-    team_id = int(request.form["team_id"])
-
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute("UPDATE teams SET points = 0 WHERE id=%s", (team_id,))
-    conn.commit()
-    cur.close()
-    conn.close()
-    return redirect("/")
-
-if __name__ == "__main__":
-    app.run(debug=True)
 
