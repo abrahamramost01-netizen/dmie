@@ -5,3 +5,8 @@ numpy
 opencv-python-headless
 pytesseract
 gunicorn
+flask
+psycopg2-binary
+openai
+python-dotenv
+
