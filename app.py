@@ -1,71 +1,58 @@
 import os
 import uuid
-import base64
+import cv2
 import psycopg2
+import numpy as np
 from flask import Flask, render_template, request, redirect, url_for, send_from_directory
-from openai import OpenAI
+from ultralytics import YOLO
 
 WIN_POINTS = 200
-app = Flask(__name__)
-
-# ================= CONFIG =================
-DATABASE_URL = os.environ.get("DATABASE_URL")
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 UPLOAD_FOLDER = "uploads"
+MODEL_PATH = "models/best.pt"
 
-if not DATABASE_URL:
-    raise RuntimeError("DATABASE_URL no está definida")
-if not OPENAI_API_KEY:
-    raise RuntimeError("OPENAI_API_KEY no está definida")
-
+app = Flask(__name__)
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-client = OpenAI(api_key=OPENAI_API_KEY)
 
 # ================= DB =================
+DATABASE_URL = os.environ.get("DATABASE_URL")
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL no está definida")
+
 def get_db():
     return psycopg2.connect(DATABASE_URL, sslmode="require")
 
-# ================= IA DOMINÓ =================
+# ================= YOLO =================
+model = YOLO(MODEL_PATH)
+
+# 🔢 MAPEO DE CLASES
+# AJUSTA según tus clases entrenadas
+# ejemplo: 0="0-0", 1="0-1", 2="0-2", ...
+CLASS_POINTS = {
+    0: 0,    # 0-0
+    1: 1,    # 0-1
+    2: 2,    # 0-2
+    3: 3,
+    4: 4,
+    5: 5,
+    6: 6,
+    7: 2,    # 1-1
+    8: 3,
+    9: 4,
+    10: 5,
+    11: 6,
+    # SIGUE según tu dataset
+}
+
 def calcular_puntos_domino(image_path: str) -> int:
-    """
-    Envía la imagen a OpenAI Vision y devuelve los puntos detectados.
-    """
-    with open(image_path, "rb") as f:
-        image_base64 = base64.b64encode(f.read()).decode("utf-8")
+    results = model(image_path, conf=0.5)
+    total = 0
 
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {
-                "role": "system",
-                "content": (
-                    "Eres un árbitro experto en dominó. "
-                    "Recibirás una foto con fichas de dominó visibles. "
-                    "Debes calcular la suma total de puntos. "
-                    "Devuelve SOLO un número entero. "
-                    "No expliques nada."
-                )
-            },
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": "Calcula los puntos de esta jugada de dominó"},
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:image/jpeg;base64,{image_base64}"
-                        }
-                    }
-                ]
-            }
-        ],
-        max_tokens=10
-    )
+    for box in results[0].boxes:
+        cls_id = int(box.cls.item())
+        puntos = CLASS_POINTS.get(cls_id, 0)
+        total += puntos
 
-    try:
-        return int(response.choices[0].message.content.strip())
-    except Exception:
-        return 0
+    return total
 
 # ================= RUTAS =================
 @app.route("/")
@@ -77,37 +64,12 @@ def index():
     teams = cur.fetchall()
 
     cur.execute("""
-        SELECT 
-            m.id,
-            t.name,
-            m.points,
-            m.created_at,
-            m.details,
-            m.image_path
+        SELECT m.id, t.name, m.points, m.created_at, m.image_path
         FROM matches m
         JOIN teams t ON t.id = m.team_id
         ORDER BY m.created_at DESC
     """)
-    
-    raw_matches = cur.fetchall()
-    matches = []
-
-    for m in raw_matches:
-        details = {}
-        if m[4]:
-            try:
-                details = json.loads(m[4])
-            except:
-                details = {}
-
-        matches.append((
-            m[0],  # id
-            m[1],  # team name
-            m[2],  # points
-            m[3],  # created_at
-            details,  # ✅ dict
-            m[5],  # image_path
-        ))
+    matches = cur.fetchall()
 
     cur.close()
     conn.close()
@@ -118,7 +80,6 @@ def index():
         matches=matches,
         win_points=WIN_POINTS
     )
-
 
 @app.route("/add_team", methods=["POST"])
 def add_team():
@@ -174,11 +135,8 @@ def add_match():
 def uploads(filename):
     return send_from_directory(UPLOAD_FOLDER, filename)
 
-# ================= MAIN =================
 if __name__ == "__main__":
-    app.run(debug=True)
-
-
+    app.run(host="0.0.0.0", port=8080)
 
 
 
