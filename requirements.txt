@@ -5,6 +5,6 @@ Pillow
 flask
 ultralytics
 opencv-python-headless
-numpy
 torch
+numpy
 
