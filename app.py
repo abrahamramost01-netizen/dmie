@@ -99,9 +99,34 @@ def add_match():
 @app.route("/uploads/<filename>")
 def uploads(filename):
     return send_from_directory(UPLOAD_FOLDER, filename)
+@app.route("/edit_team_points", methods=["POST"])
+def edit_team_points():
+    team_id = request.form["team_id"]
+    points = request.form["points"]
+
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute(
+        "UPDATE teams SET points = %s WHERE id = %s",
+        (points, team_id)
+    )
+    conn.commit()
+    conn.close()
+    return redirect("/")
+@app.route("/delete_team", methods=["POST"])
+def delete_team():
+    team_id = request.form["team_id"]
+
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM teams WHERE id = %s", (team_id,))
+    conn.commit()
+    conn.close()
+    return redirect("/")
 
 if __name__ == "__main__":
     app.run()
+
 
 
 
