@@ -3,45 +3,34 @@ import uuid
 import psycopg2
 from flask import Flask, render_template, request, redirect, url_for, send_from_directory
 from ultralytics import YOLO
+import cv2
 
-# ================= CONFIG =================
-WIN_POINTS = 200
 UPLOAD_FOLDER = "uploads"
-DATABASE_URL = os.environ.get("DATABASE_URL")
-
-if not DATABASE_URL:
-    raise RuntimeError("DATABASE_URL no está definida")
-
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+WIN_POINTS = 200
 
 app = Flask(__name__)
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# ================= DB =================
+# ====== DB ======
+DATABASE_URL = os.environ.get("DATABASE_URL")
+
 def get_db():
     return psycopg2.connect(DATABASE_URL, sslmode="require")
 
-# ================= YOLO =================
-# Carga del modelo entrenado
-model = YOLO("best.pt")
+# ====== YOLO ======
+model = YOLO("best.pt")  # <-- TU MODELO ENTRENADO
 
-def calcular_puntos_domino(image_path: str) -> int:
-    """
-    Detecta fichas de dominó con YOLO y suma los puntos.
-    Cada clase representa un valor (0–6).
-    """
-    results = model(image_path, conf=0.4, verbose=False)
+def calcular_puntos_domino(image_path):
+    results = model(image_path, conf=0.5)
     total = 0
 
     for r in results:
-        if r.boxes is None:
-            continue
-        for box in r.boxes:
-            clase = int(box.cls[0])
-            total += clase
+        for cls in r.boxes.cls:
+            total += int(cls.item())  # clase = puntos
 
     return total
 
-# ================= RUTAS =================
+# ====== RUTAS ======
 @app.route("/")
 def index():
     conn = get_db()
@@ -88,16 +77,14 @@ def add_match():
     team_id = int(request.form.get("team_id"))
     image = request.files.get("image")
 
-    if not image or not image.filename:
+    if not image:
         return redirect(url_for("index"))
 
-    ext = image.filename.rsplit(".", 1)[-1].lower()
-    filename = f"{uuid.uuid4()}.{ext}"
-    image_path = os.path.join(UPLOAD_FOLDER, filename)
-    image.save(image_path)
+    filename = f"{uuid.uuid4()}.jpg"
+    path = os.path.join(UPLOAD_FOLDER, filename)
+    image.save(path)
 
-    # 🔥 YOLO calcula los puntos
-    points = calcular_puntos_domino(image_path)
+    points = calcular_puntos_domino(path)
 
     conn = get_db()
     cur = conn.cursor()
@@ -105,12 +92,10 @@ def add_match():
     cur.execute("""
         INSERT INTO matches (team_id, points, image_path)
         VALUES (%s, %s, %s)
-    """, (team_id, points, image_path))
+    """, (team_id, points, path))
 
     cur.execute("""
-        UPDATE teams
-        SET points = points + %s
-        WHERE id = %s
+        UPDATE teams SET points = points + %s WHERE id = %s
     """, (points, team_id))
 
     conn.commit()
@@ -122,7 +107,5 @@ def add_match():
 @app.route("/uploads/<filename>")
 def uploads(filename):
     return send_from_directory(UPLOAD_FOLDER, filename)
-
-# ================= MAIN =================
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
