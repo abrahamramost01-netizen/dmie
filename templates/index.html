@@ -57,10 +57,10 @@
 
 <!-- PARTIDA ACTUAL (SIEMPRE VISIBLE) -->
 <details open>
-    <summary>🟢 Partida actual</summary>
+    <summary>Partida actual</summary>
     <form method="post" action="/add_match" enctype="multipart/form-data">
         <select name="team_id" required>
-            <option value="">Equipo perdedor</option>
+            <option value="">seleccione el equipo</option>
             {% for t in teams %}
                 <option value="{{ t[0] }}">{{ t[1] }}</option>
             {% endfor %}
@@ -70,7 +70,7 @@
         <br>
         <input type="file" name="image" accept="image/*">
         <br>
-        <button type="submit">Guardar partida</button>
+        <button type="submit">actualizar</button>
     </form>
 </details>
 
@@ -102,5 +102,6 @@
 
 </body>
 </html>
+
 
 
