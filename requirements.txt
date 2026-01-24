@@ -2,4 +2,9 @@ Flask
 gunicorn
 psycopg2-binary
 Pillow
-openai
+flask
+ultralytics
+opencv-python-headless
+numpy
+torch
+
