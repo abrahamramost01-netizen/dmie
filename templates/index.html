@@ -6,90 +6,44 @@
 
 <style>
 body {
-    font-family: Arial, sans-serif;
+    font-family: Arial;
     background: #f2f2f2;
     padding: 20px;
 }
 
-h1 {
-    text-align: center;
-}
-
-/* ================= EQUIPOS ================= */
 .teams {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
     gap: 15px;
-    margin-bottom: 30px;
 }
 
-.team-card {
+.team {
     background: white;
-    border-radius: 10px;
     padding: 15px;
+    border-radius: 8px;
     text-align: center;
     box-shadow: 0 2px 6px rgba(0,0,0,.15);
-    transition: transform .3s, box-shadow .3s;
+    transition: transform .3s, background .3s;
 }
 
-.team-card:hover {
-    transform: scale(1.02);
-}
-
-/* GANADOR */
 .winner {
-    border: 3px solid gold;
-    animation: glow 1.2s infinite alternate;
+    background: #d4edda;
+    animation: glow 1s infinite alternate;
 }
 
 @keyframes glow {
-    from { box-shadow: 0 0 10px gold; }
-    to   { box-shadow: 0 0 25px orange; }
+    from { box-shadow: 0 0 5px #28a745; }
+    to   { box-shadow: 0 0 20px #28a745; }
 }
 
-.team-name {
-    font-size: 20px;
-    font-weight: bold;
-}
-
-.team-points {
-    font-size: 44px;
+.points {
+    font-size: 42px;
     color: #2c7be5;
-    margin: 10px 0;
 }
 
-.team-wins {
+.wins {
     font-size: 14px;
     color: #555;
-}
-
-/* ================= BOTONES ================= */
-.team-actions form {
-    margin-top: 6px;
-}
-
-button {
-    padding: 6px 12px;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-}
-
-.edit {
-    background: #ffc107;
-}
-
-.delete {
-    background: #dc3545;
-    color: white;
-}
-
-/* ================= SECCIONES ================= */
-details {
-    background: white;
-    padding: 15px;
-    border-radius: 10px;
-    margin-bottom: 20px;
 }
 </style>
 </head>
@@ -98,87 +52,55 @@ details {
 
 <h1>🁢 Dominó</h1>
 
-<!-- ================= EQUIPOS ================= -->
 <h2>Equipos</h2>
-
 <div class="teams">
 {% for t in teams %}
-    <div class="team-card {% if t[2] == 0 and t[3] > 0 %}winner{% endif %}">
-        <div class="team-name">{{ t[1] }}</div>
-
-        <div class="team-points">{{ t[2] }}</div>
-
-        <div class="team-wins">
-            🏆 Partidas ganadas: <strong>{{ t[3] }}</strong>
-        </div>
-
-        <div class="team-actions">
-            <!-- EDITAR PUNTOS -->
-            <form method="post" action="/edit_team_points"
-                  onsubmit="return confirm('¿Cambiar puntos manualmente?');">
-                <input type="hidden" name="team_id" value="{{ t[0] }}">
-                <input type="number" name="points" placeholder="Nuevo puntaje" required>
-                <button class="edit">Editar</button>
-            </form>
-
-            <!-- ELIMINAR -->
-            <form method="post" action="/delete_team"
-                  onsubmit="return confirm('¿Eliminar este equipo y su historial?');">
-                <input type="hidden" name="team_id" value="{{ t[0] }}">
-                <button class="delete">Eliminar</button>
-            </form>
-        </div>
-    </div>
+<div class="team {% if t[2] >= win_points %}winner{% endif %}">
+    <h3>{{ t[1] }}</h3>
+    <div class="points">{{ t[2] }}</div>
+    <div class="wins">🏆 Partidas ganadas: {{ t[3] }}</div>
+</div>
 {% endfor %}
 </div>
 
-<!-- ================= CREAR EQUIPO ================= -->
-<details>
-<summary>➕ Crear equipo</summary>
+<hr>
+
+<h2>➕ Crear equipo</h2>
 <form method="post" action="/add_team">
-    <input name="name" placeholder="Nombre del equipo" required>
+    <input name="name" required placeholder="Nombre del equipo">
     <button>Crear</button>
 </form>
-</details>
 
-<!-- ================= PARTIDA ================= -->
-<details open>
-<summary>🎯 Nueva partida</summary>
+<hr>
 
-<form method="post"
-      action="/add_match"
-      enctype="multipart/form-data">
-
+<h2>🎯 Partida</h2>
+<form method="post" action="/add_match" enctype="multipart/form-data">
     <select name="team_id" required>
-        <option value="">Elegir equipo perdedor</option>
+        <option value="">Equipo perdedor</option>
         {% for t in teams %}
-            <option value="{{ t[0] }}">{{ t[1] }}</option>
+        <option value="{{ t[0] }}">{{ t[1] }}</option>
         {% endfor %}
-    </select>
+    </select><br><br>
 
-    <br><br>
+    <input type="number" name="points" placeholder="Puntos (opcional)"><br><br>
 
-    <!-- OPCIONAL -->
-    <input type="number" name="points" placeholder="Puntos (opcional)">
-
-    <br><br>
-
-    <!-- FOTO -->
-    <input type="file" name="image" accept="image/*">
-
-    <br><br>
+    <input type="file" name="image" accept="image/*"><br><br>
 
     <button>Actualizar</button>
 </form>
-</details>
 
-<!-- ================= HISTORIAL ================= -->
-<details>
-<summary>📜 Historial</summary>
+<hr>
+
+<h2>📜 Historial</h2>
 {% for m in matches %}
-    <p>Equipo <strong>{{ m[1] }}</strong> +{{ m[2] }} puntos</p>
+<p>
+    {{ m[1] }} +{{ m[2] }}
+    {% if m[4] %}
+        <br><img src="/{{ m[4] }}" width="120">
+    {% endif %}
+</p>
 {% endfor %}
-</details>
 
 </body>
 </html>
+
