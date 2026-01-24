@@ -1,179 +1,177 @@
 import os
-import uuid
 import json
-import time
+import base64
 import psycopg2
-from flask import Flask, render_template, request, redirect, url_for, send_from_directory
+from flask import Flask, request, redirect, render_template_string
 from openai import OpenAI
 
 # ================= CONFIG =================
-WIN_POINTS = 200
-MAX_RETRIES = 3
-UPLOAD_FOLDER = "uploads"
 
 app = Flask(__name__)
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 
-DATABASE_URL = os.environ.get("DATABASE_URL")
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
-
-if not DATABASE_URL:
-    raise RuntimeError("DATABASE_URL no definida")
-
-client = OpenAI(api_key=OPENAI_API_KEY)
+DATABASE_URL = os.environ["DATABASE_URL"]
 
 # ================= DB =================
+
 def get_db():
-    return psycopg2.connect(DATABASE_URL, sslmode="require")
+    return psycopg2.connect(DATABASE_URL)
 
-# ================= IA DOMINÓ =================
+# ================= IA =================
+
+PROMPT = """
+Eres un sistema experto en dominó DOBLE 9.
+
+Tareas:
+1. Detecta TODAS las fichas visibles aunque estén juntas o tocándose.
+2. Cada ficha tiene dos valores (0 a 9).
+3. Devuelve TODAS las fichas detectadas.
+4. Calcula el total sumando TODOS los lados.
+5. Incluye bounding boxes aproximadas.
+
+Devuelve SOLO JSON con esta estructura exacta:
+
+{
+  "total": number,
+  "fichas": [
+    {
+      "valores": [int, int],
+      "suma": int,
+      "box": { "x": int, "y": int, "w": int, "h": int }
+    }
+  ]
+}
+"""
+
 def calcular_puntos_domino(image_path):
-    conn = get_db()
-    cur = conn.cursor()
+    with open(image_path, "rb") as f:
+        img_b64 = base64.b64encode(f.read()).decode("utf-8")
 
-    # ✅ CACHE POR image_path
-    cur.execute(
-        "SELECT details FROM matches WHERE image_path = %s AND details IS NOT NULL LIMIT 1",
-        (image_path,)
+    response = client.responses.create(
+        model="gpt-4.1-mini",
+        input=[{
+            "role": "user",
+            "content": [
+                {"type": "input_text", "text": PROMPT},
+                {
+                    "type": "input_image",
+                    "image_url": f"data:image/jpeg;base64,{img_b64}"
+                }
+            ]
+        }],
+        max_output_tokens=500
     )
-    cached = cur.fetchone()
-    if cached:
-        cur.close()
-        conn.close()
-        return json.loads(cached[0])
 
-    last_error = None
-
-    for _ in range(MAX_RETRIES):
-        try:
-            with open(image_path, "rb") as f:
-                img_bytes = f.read()
-
-            response = client.responses.create(
-                model="gpt-4.1-mini",
-                input=[{
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "input_text",
-                            "text": (
-                                "Analiza esta imagen de fichas de dominó DOBLE 9.\n"
-                                "Detecta TODAS las fichas visibles, incluso si están juntas.\n"
-                                "Para cada ficha indica: valores (lado A y B) y suma.\n"
-                                "Devuelve JSON EXACTO con este formato:\n"
-                                "{ total: number, fichas: [ { a:number, b:number, suma:number } ] }\n"
-                                "NO inventes fichas."
-                            )
-                        },
-                        {
-                            "type": "input_image",
-                            "image_base64": img_bytes
-                        }
-                    ]
-                }]
-            )
-
-            text = response.output_text
-            data = json.loads(text)
-            cur.close()
-            conn.close()
-            return data
-
-        except Exception as e:
-            last_error = str(e)
-            time.sleep(1)
-
-    cur.close()
-    conn.close()
-    raise RuntimeError(f"IA falló tras {MAX_RETRIES} intentos: {last_error}")
+    text = response.output_text
+    return json.loads(text)
 
 # ================= ROUTES =================
-@app.route("/")
+
+@app.route("/", methods=["GET"])
 def index():
     conn = get_db()
     cur = conn.cursor()
-
-    cur.execute("SELECT id, name, points FROM teams ORDER BY id")
-    teams = cur.fetchall()
-
     cur.execute("""
-        SELECT m.id, t.name, m.points, m.image_path, m.details
-        FROM matches m
-        JOIN teams t ON t.id = m.team_id
-        ORDER BY m.created_at DESC
+        SELECT id, points, details, image_path
+        FROM matches
+        ORDER BY id DESC
     """)
-    matches = cur.fetchall()
-
+    rows = cur.fetchall()
     cur.close()
     conn.close()
 
-    return render_template(
-        "index.html",
-        teams=teams,
-        matches=matches,
-        win_points=WIN_POINTS
-    )
-
-@app.route("/add_team", methods=["POST"])
-def add_team():
-    name = request.form.get("name", "").strip()
-    if not name:
-        return redirect(url_for("index"))
-
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute("INSERT INTO teams (name) VALUES (%s)", (name,))
-    conn.commit()
-    cur.close()
-    conn.close()
-    return redirect(url_for("index"))
+    return render_template_string(TEMPLATE, matches=rows)
 
 @app.route("/add_match", methods=["POST"])
 def add_match():
-    team_id = int(request.form.get("team_id"))
-    image = request.files.get("image")
+    image = request.files["image"]
+    path = f"uploads/{image.filename}"
+    os.makedirs("uploads", exist_ok=True)
+    image.save(path)
 
-    if not image:
-        return redirect(url_for("index"))
-
-    ext = image.filename.rsplit(".", 1)[-1].lower()
-    filename = f"{uuid.uuid4()}.{ext}"
-    image_path = f"{UPLOAD_FOLDER}/{filename}"
-    image.save(image_path)
-
-    resultado = calcular_puntos_domino(image_path)
-    points = resultado["total"]
-    details_json = json.dumps(resultado, ensure_ascii=False)
+    resultado = calcular_puntos_domino(path)
 
     conn = get_db()
     cur = conn.cursor()
-
     cur.execute("""
-        INSERT INTO matches (team_id, points, image_path, details)
-        VALUES (%s, %s, %s, %s)
-    """, (team_id, points, image_path, details_json))
-
-    cur.execute("""
-        UPDATE teams SET points = points + %s WHERE id = %s
-    """, (points, team_id))
-
-    # 🏆 Reset automático
-    cur.execute("SELECT id FROM teams WHERE points >= %s", (WIN_POINTS,))
-    if cur.fetchone():
-        cur.execute("UPDATE teams SET points = 0")
-
+        INSERT INTO matches (points, details, image_path)
+        VALUES (%s, %s, %s)
+    """, (
+        resultado["total"],
+        json.dumps(resultado),
+        path
+    ))
     conn.commit()
     cur.close()
     conn.close()
-    return redirect(url_for("index"))
 
-@app.route("/uploads/<filename>")
-def uploads(filename):
-    return send_from_directory(UPLOAD_FOLDER, filename)
+    return redirect("/")
+
+# ================= HTML =================
+
+TEMPLATE = """
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Dominó IA</title>
+<style>
+.box {
+  position:absolute;
+  border:2px solid red;
+}
+.container {
+  position:relative;
+  display:inline-block;
+}
+</style>
+</head>
+<body>
+
+<h2>Subir partida</h2>
+<form method="POST" action="/add_match" enctype="multipart/form-data">
+<input type="file" name="image" required>
+<button>Enviar</button>
+</form>
+
+<hr>
+
+{% for id, points, details, image in matches %}
+<h3>Total: {{ points }}</h3>
+
+<div class="container">
+<img src="{{ image }}" width="400">
+
+{% set d = details | tojson | safe %}
+{% for f in details.fichas %}
+<div class="box"
+style="
+left:{{f.box.x}}px;
+top:{{f.box.y}}px;
+width:{{f.box.w}}px;
+height:{{f.box.h}}px;">
+</div>
+{% endfor %}
+</div>
+
+<ul>
+{% for f in details.fichas %}
+<li>{{ f.valores[0] }} + {{ f.valores[1] }} = {{ f.suma }}</li>
+{% endfor %}
+</ul>
+
+<hr>
+{% endfor %}
+
+</body>
+</html>
+"""
 
 # ================= RUN =================
+
 if __name__ == "__main__":
-    app.run()
+    app.run(host="0.0.0.0", port=8080)
+
 
 
 
