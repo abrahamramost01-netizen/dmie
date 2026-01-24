@@ -1,7 +1,6 @@
-flask
+Flask
 gunicorn
 psycopg2-binary
-opencv-python-headless
-numpy
+pytesseract
 Pillow
-
+opencv-python-headless
