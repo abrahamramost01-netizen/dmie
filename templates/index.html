@@ -3,18 +3,15 @@
 <head>
 <meta charset="UTF-8">
 <title>Dominó</title>
-
 <style>
 body {
     font-family: Arial, sans-serif;
     background: #f2f2f2;
     padding: 20px;
 }
-
 h1 {
     text-align: center;
 }
-
 /* EQUIPOS */
 .teams {
     display: grid;
@@ -22,7 +19,6 @@ h1 {
     gap: 15px;
     margin-bottom: 30px;
 }
-
 .team-card {
     background: white;
     border-radius: 8px;
@@ -30,39 +26,37 @@ h1 {
     text-align: center;
     box-shadow: 0 2px 6px rgba(0,0,0,.15);
 }
-
 .team-name {
     font-size: 20px;
     font-weight: bold;
 }
-
 .team-points {
     font-size: 42px;
     color: #2c7be5;
     margin: 10px 0;
 }
-
+.team-wins {
+    font-size: 14px;
+    color: #444;
+    margin-bottom: 8px;
+}
 /* BOTONES */
 .team-actions form {
     margin-top: 5px;
 }
-
 button {
     padding: 6px 10px;
     border: none;
     border-radius: 4px;
     cursor: pointer;
 }
-
 .edit {
     background: #ffc107;
 }
-
 .delete {
     background: #dc3545;
     color: white;
 }
-
 /* SECCIONES */
 details {
     background: white;
@@ -72,19 +66,23 @@ details {
 }
 </style>
 </head>
-
 <body>
 
 <h1>🁢 Dominó</h1>
 
 <!-- ================= EQUIPOS (SIEMPRE VISIBLES) ================= -->
 <h2>Equipos</h2>
-
 <div class="teams">
 {% for t in teams %}
     <div class="team-card">
         <div class="team-name">{{ t[1] }}</div>
+
         <div class="team-points">{{ t[2] }}</div>
+
+        <!-- PARTIDAS GANADAS -->
+        <div class="team-wins">
+            🏆 Partidas ganadas: <strong>{{ t[3] }}</strong>
+        </div>
 
         <div class="team-actions">
             <!-- EDITAR PUNTOS -->
@@ -118,7 +116,6 @@ details {
 <!-- ================= PARTIDA ACTUAL ================= -->
 <details open>
 <summary>🎯 Partida</summary>
-
 <form method="post" action="/add_match">
     <select name="team_id" required>
         <option value="">Elegir equipo perdedor</option>
@@ -126,13 +123,9 @@ details {
             <option value="{{ t[0] }}">{{ t[1] }}</option>
         {% endfor %}
     </select>
-
     <br><br>
-
     <input type="number" name="points" placeholder="Puntos" required>
-
     <br><br>
-
     <button>Actualizar</button>
 </form>
 </details>
@@ -147,5 +140,4 @@ details {
 
 </body>
 </html>
-
 
