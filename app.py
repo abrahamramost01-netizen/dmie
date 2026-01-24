@@ -1,17 +1,13 @@
 import os
-import uuid
 import psycopg2
-from flask import Flask, render_template, request, redirect, url_for, send_from_directory
+from flask import Flask, render_template, request, redirect
+from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
-UPLOAD_FOLDER = "uploads"
 
-if not DATABASE_URL:
-    raise RuntimeError("DATABASE_URL no está definida")
-
-# Asegurar carpeta de uploads
+UPLOAD_FOLDER = "static/uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 def get_db():
@@ -26,7 +22,7 @@ def index():
     teams = cur.fetchall()
 
     cur.execute("""
-        SELECT m.id, t.name, m.points, m.created_at, m.image_path
+        SELECT m.id, t.name, m.points, m.created_at
         FROM matches m
         JOIN teams t ON t.id = m.team_id
         ORDER BY m.created_at DESC
@@ -38,67 +34,24 @@ def index():
 
     return render_template("index.html", teams=teams, matches=matches)
 
+# -------- EQUIPOS --------
+
 @app.route("/add_team", methods=["POST"])
 def add_team():
-    name = request.form.get("name", "").strip()
-    if not name:
-        return redirect(url_for("index"))
+    name = request.form["name"]
 
     conn = get_db()
     cur = conn.cursor()
-
     cur.execute(
-        "INSERT INTO teams (name) VALUES (%s)",
+        "INSERT INTO teams (name, points) VALUES (%s, 0)",
         (name,)
     )
-
     conn.commit()
     cur.close()
     conn.close()
 
-    return redirect(url_for("index"))
+    return redirect("/")
 
-@app.route("/add_match", methods=["POST"])
-def add_match():
-    try:
-        team_id = int(request.form.get("team_id"))
-        points = int(request.form.get("points"))
-    except (TypeError, ValueError):
-        return redirect(url_for("index"))
-
-    image = request.files.get("image")
-    image_path = None
-
-    if image and image.filename:
-        ext = image.filename.rsplit(".", 1)[-1].lower()
-        filename = f"{uuid.uuid4()}.{ext}"
-        image_path = f"{UPLOAD_FOLDER}/{filename}"
-        image.save(image_path)
-
-    conn = get_db()
-    cur = conn.cursor()
-
-    cur.execute("""
-        INSERT INTO matches (team_id, points, image_path)
-        VALUES (%s, %s, %s)
-    """, (team_id, points, image_path))
-
-    cur.execute("""
-        UPDATE teams
-        SET points = points + %s
-        WHERE id = %s
-    """, (points, team_id))
-
-    conn.commit()
-    cur.close()
-    conn.close()
-
-    return redirect(url_for("index"))
-
-# 🔥 RUTA CLAVE QUE FALTABA (SOLUCIONA EL 500)
-@app.route("/uploads/<filename>")
-def uploads(filename):
-    return send_from_directory(UPLOAD_FOLDER, filename)
 @app.route("/edit_team_points", methods=["POST"])
 def edit_team_points():
     team_id = request.form["team_id"]
@@ -111,21 +64,57 @@ def edit_team_points():
         (points, team_id)
     )
     conn.commit()
+    cur.close()
     conn.close()
+
     return redirect("/")
+
 @app.route("/delete_team", methods=["POST"])
 def delete_team():
     team_id = request.form["team_id"]
 
     conn = get_db()
     cur = conn.cursor()
+
+    # borrar partidas del equipo primero
+    cur.execute("DELETE FROM matches WHERE team_id = %s", (team_id,))
     cur.execute("DELETE FROM teams WHERE id = %s", (team_id,))
+
     conn.commit()
+    cur.close()
     conn.close()
+
+    return redirect("/")
+
+# -------- PARTIDAS --------
+
+@app.route("/add_match", methods=["POST"])
+def add_match():
+    team_id = request.form["team_id"]
+    points = request.form["points"]
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    cur.execute(
+        "INSERT INTO matches (team_id, points) VALUES (%s, %s)",
+        (team_id, points)
+    )
+
+    # sumar puntos al equipo
+    cur.execute(
+        "UPDATE teams SET points = points + %s WHERE id = %s",
+        (points, team_id)
+    )
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
     return redirect("/")
 
 if __name__ == "__main__":
-    app.run()
+    app.run(debug=True)
 
 
 
