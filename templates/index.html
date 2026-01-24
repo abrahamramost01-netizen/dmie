@@ -9,12 +9,12 @@ body {
     background: #f2f2f2;
     padding: 20px;
 }
-h1 {
-    text-align: center;
-}
+h1 { text-align: center; }
+
+/* EQUIPOS */
 .teams {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
     gap: 15px;
 }
 .team-card {
@@ -24,20 +24,18 @@ h1 {
     text-align: center;
     box-shadow: 0 2px 6px rgba(0,0,0,.15);
 }
-.team-name {
-    font-size: 20px;
-    font-weight: bold;
-}
+.team-name { font-size: 20px; font-weight: bold; }
 .team-points {
-    font-size: 40px;
+    font-size: 42px;
     color: #2c7be5;
 }
 .team-wins {
     font-size: 14px;
-    color: #28a745;
+    color: #555;
 }
+
+/* BOTONES */
 button {
-    margin-top: 5px;
     padding: 6px 10px;
     border: none;
     border-radius: 4px;
@@ -45,7 +43,7 @@ button {
 }
 .edit { background: #ffc107; }
 .delete { background: #dc3545; color: white; }
-.reset { background: #6c757d; color: white; }
+
 details {
     background: white;
     padding: 15px;
@@ -57,31 +55,26 @@ details {
 
 <body>
 
-<h1>🁢 Dominó</h1>
+<h1>Dominó</h1>
 
+<!-- ================= EQUIPOS ================= -->
 <h2>Equipos</h2>
 <div class="teams">
 {% for t in teams %}
 <div class="team-card">
     <div class="team-name">{{ t[1] }}</div>
-    <div class="team-points">{{ t[2] }} pts</div>
+    <div class="team-points">{{ t[2] }}</div>
     <div class="team-wins">🏆 Partidas ganadas: {{ t[3] }}</div>
 
     <form method="post" action="/edit_team_points"
-          onsubmit="return confirm('¿Editar puntos?');">
+          onsubmit="return confirm('¿Cambiar puntos del equipo?');">
         <input type="hidden" name="team_id" value="{{ t[0] }}">
-        <input type="number" name="points" required>
+        <input type="number" name="points" placeholder="Nuevo puntaje" required>
         <button class="edit">Editar</button>
     </form>
 
-    <form method="post" action="/reset_team"
-          onsubmit="return confirm('¿Resetear puntos?');">
-        <input type="hidden" name="team_id" value="{{ t[0] }}">
-        <button class="reset">Reset</button>
-    </form>
-
     <form method="post" action="/delete_team"
-          onsubmit="return confirm('¿Eliminar equipo?');">
+          onsubmit="return confirm('¿Eliminar equipo y su historial?');">
         <input type="hidden" name="team_id" value="{{ t[0] }}">
         <button class="delete">Eliminar</button>
     </form>
@@ -89,32 +82,42 @@ details {
 {% endfor %}
 </div>
 
+<!-- ================= CREAR EQUIPO ================= -->
 <details>
 <summary>➕ Crear equipo</summary>
 <form method="post" action="/add_team">
-    <input name="name" required>
+    <input name="name" placeholder="Nombre del equipo" required>
     <button>Crear</button>
 </form>
 </details>
 
+<!-- ================= PARTIDA ================= -->
 <details open>
-<summary>🎯 Partida</summary>
+<summary>🎯 Nueva partida</summary>
 <form method="post" action="/add_match">
     <select name="team_id" required>
-        <option value="">Equipo perdedor</option>
+        <option value="">Elegir equipo</option>
         {% for t in teams %}
         <option value="{{ t[0] }}">{{ t[1] }}</option>
         {% endfor %}
-    </select>
-    <br><br>
-    <input type="number" name="points" required>
-    <br><br>
-    <button>Guardar</button>
+    </select><br><br>
+
+    <input type="number" name="points" placeholder="Puntos" required><br><br>
+    <button>Actualizar</button>
 </form>
+</details>
+
+<!-- ================= HISTORIAL ================= -->
+<details>
+<summary>📜 Historial</summary>
+{% for m in matches %}
+<p>Equipo {{ m[1] }} +{{ m[2] }} puntos</p>
+{% endfor %}
 </details>
 
 </body>
 </html>
+
 
 
 
