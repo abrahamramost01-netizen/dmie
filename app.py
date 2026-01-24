@@ -77,12 +77,37 @@ def index():
     teams = cur.fetchall()
 
     cur.execute("""
-        SELECT m.id, t.name, m.points, m.created_at, m.image_path
+        SELECT 
+            m.id,
+            t.name,
+            m.points,
+            m.created_at,
+            m.details,
+            m.image_path
         FROM matches m
         JOIN teams t ON t.id = m.team_id
         ORDER BY m.created_at DESC
     """)
-    matches = cur.fetchall()
+    
+    raw_matches = cur.fetchall()
+    matches = []
+
+    for m in raw_matches:
+        details = {}
+        if m[4]:
+            try:
+                details = json.loads(m[4])
+            except:
+                details = {}
+
+        matches.append((
+            m[0],  # id
+            m[1],  # team name
+            m[2],  # points
+            m[3],  # created_at
+            details,  # ✅ dict
+            m[5],  # image_path
+        ))
 
     cur.close()
     conn.close()
@@ -93,6 +118,7 @@ def index():
         matches=matches,
         win_points=WIN_POINTS
     )
+
 
 @app.route("/add_team", methods=["POST"])
 def add_team():
@@ -151,6 +177,7 @@ def uploads(filename):
 # ================= MAIN =================
 if __name__ == "__main__":
     app.run(debug=True)
+
 
 
 
