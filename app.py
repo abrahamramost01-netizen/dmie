@@ -1,56 +1,43 @@
 import os
 import uuid
-import cv2
 import psycopg2
-import numpy as np
 from flask import Flask, render_template, request, redirect, url_for, send_from_directory
 from ultralytics import YOLO
 
+# ================= CONFIG =================
 WIN_POINTS = 200
 UPLOAD_FOLDER = "uploads"
-MODEL_PATH = "models/best.pt"
-
-app = Flask(__name__)
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-
-# ================= DB =================
 DATABASE_URL = os.environ.get("DATABASE_URL")
+
 if not DATABASE_URL:
     raise RuntimeError("DATABASE_URL no está definida")
 
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+app = Flask(__name__)
+
+# ================= DB =================
 def get_db():
     return psycopg2.connect(DATABASE_URL, sslmode="require")
 
 # ================= YOLO =================
-model = YOLO(MODEL_PATH)
-
-# 🔢 MAPEO DE CLASES
-# AJUSTA según tus clases entrenadas
-# ejemplo: 0="0-0", 1="0-1", 2="0-2", ...
-CLASS_POINTS = {
-    0: 0,    # 0-0
-    1: 1,    # 0-1
-    2: 2,    # 0-2
-    3: 3,
-    4: 4,
-    5: 5,
-    6: 6,
-    7: 2,    # 1-1
-    8: 3,
-    9: 4,
-    10: 5,
-    11: 6,
-    # SIGUE según tu dataset
-}
+# Carga del modelo entrenado
+model = YOLO("best.pt")
 
 def calcular_puntos_domino(image_path: str) -> int:
-    results = model(image_path, conf=0.5)
+    """
+    Detecta fichas de dominó con YOLO y suma los puntos.
+    Cada clase representa un valor (0–6).
+    """
+    results = model(image_path, conf=0.4, verbose=False)
     total = 0
 
-    for box in results[0].boxes:
-        cls_id = int(box.cls.item())
-        puntos = CLASS_POINTS.get(cls_id, 0)
-        total += puntos
+    for r in results:
+        if r.boxes is None:
+            continue
+        for box in r.boxes:
+            clase = int(box.cls[0])
+            total += clase
 
     return total
 
@@ -109,6 +96,7 @@ def add_match():
     image_path = os.path.join(UPLOAD_FOLDER, filename)
     image.save(image_path)
 
+    # 🔥 YOLO calcula los puntos
     points = calcular_puntos_domino(image_path)
 
     conn = get_db()
@@ -135,8 +123,6 @@ def add_match():
 def uploads(filename):
     return send_from_directory(UPLOAD_FOLDER, filename)
 
+# ================= MAIN =================
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
-
-
-
