@@ -62,6 +62,28 @@ def login():
         session["user"] = username
 
     return redirect("/")
+@app.route("/register", methods=["POST"])
+def register():
+    username = request.form["username"]
+    password = request.form["password"]
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    try:
+        cur.execute(
+            "INSERT INTO users (username, password) VALUES (%s, %s)",
+            (username, password),
+        )
+        conn.commit()
+        session["user"] = username
+    except Exception:
+        conn.rollback()
+    finally:
+        cur.close()
+        conn.close()
+
+    return redirect("/")
 
 
 @app.route("/logout")
@@ -181,4 +203,5 @@ def add_match():
 # ================= RUN =================
 if __name__ == "__main__":
     app.run(debug=True)
+
 
