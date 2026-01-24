@@ -75,7 +75,7 @@ details {
 
 <body>
 
-<h1>🁢 Dominó</h1>
+<h1></h1> Dominó</h1>
 
 <!-- ================= EQUIPOS (SIEMPRE VISIBLES) ================= -->
 <h2>Equipos</h2>
@@ -117,11 +117,11 @@ details {
 
 <!-- ================= PARTIDA ACTUAL ================= -->
 <details open>
-<summary>🎯 Partida</summary>
+<summary> Partida</summary>
 
 <form method="post" action="/add_match">
     <select name="team_id" required>
-        <option value="">Elegir equipo perdedor</option>
+        <option value="">Elegir equipo </option>
         {% for t in teams %}
             <option value="{{ t[0] }}">{{ t[1] }}</option>
         {% endfor %}
@@ -139,7 +139,7 @@ details {
 
 <!-- ================= HISTORIAL ================= -->
 <details>
-<summary>📜 Historial</summary>
+<summary> Historial</summary>
 {% for m in matches %}
     <p>Equipo {{ m[1] }} +{{ m[2] }} puntos</p>
 {% endfor %}
@@ -147,4 +147,5 @@ details {
 
 </body>
 </html>
+
 
