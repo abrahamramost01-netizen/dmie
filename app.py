@@ -1,7 +1,7 @@
 import os
 import uuid
 import psycopg2
-from flask import Flask, render_template, request, redirect, url_for
+from flask import Flask, render_template, request, redirect, url_for, send_from_directory
 
 app = Flask(__name__)
 
@@ -11,6 +11,7 @@ UPLOAD_FOLDER = "uploads"
 if not DATABASE_URL:
     raise RuntimeError("DATABASE_URL no está definida")
 
+# Asegurar carpeta de uploads
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 def get_db():
@@ -45,7 +46,12 @@ def add_team():
 
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("INSERT INTO teams (name) VALUES (%s)", (name,))
+
+    cur.execute(
+        "INSERT INTO teams (name) VALUES (%s)",
+        (name,)
+    )
+
     conn.commit()
     cur.close()
     conn.close()
@@ -78,7 +84,9 @@ def add_match():
     """, (team_id, points, image_path))
 
     cur.execute("""
-        UPDATE teams SET points = points + %s WHERE id = %s
+        UPDATE teams
+        SET points = points + %s
+        WHERE id = %s
     """, (points, team_id))
 
     conn.commit()
@@ -87,14 +95,13 @@ def add_match():
 
     return redirect(url_for("index"))
 
+# 🔥 RUTA CLAVE QUE FALTABA (SOLUCIONA EL 500)
 @app.route("/uploads/<filename>")
-def uploaded_file(filename):
-    return app.send_static_file(f"../uploads/{filename}")
+def uploads(filename):
+    return send_from_directory(UPLOAD_FOLDER, filename)
 
 if __name__ == "__main__":
     app.run()
-
-
 
 
 
