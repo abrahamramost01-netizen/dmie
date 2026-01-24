@@ -9,13 +9,31 @@ body {
     background: #f2f2f2;
     padding: 20px;
 }
-h1 { text-align: center; }
+h1, h2 {
+    text-align: center;
+}
+
+/* LOGIN */
+.login-box {
+    max-width: 320px;
+    margin: 40px auto;
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 6px rgba(0,0,0,.2);
+}
+.login-box input {
+    width: 100%;
+    padding: 8px;
+    margin-bottom: 10px;
+}
 
 /* EQUIPOS */
 .teams {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
     gap: 15px;
+    margin-bottom: 30px;
 }
 .team-card {
     background: white;
@@ -24,10 +42,14 @@ h1 { text-align: center; }
     text-align: center;
     box-shadow: 0 2px 6px rgba(0,0,0,.15);
 }
-.team-name { font-size: 20px; font-weight: bold; }
+.team-name {
+    font-size: 20px;
+    font-weight: bold;
+}
 .team-points {
     font-size: 42px;
     color: #2c7be5;
+    margin: 10px 0;
 }
 .team-wins {
     font-size: 14px;
@@ -35,50 +57,85 @@ h1 { text-align: center; }
 }
 
 /* BOTONES */
+.team-actions form {
+    margin-top: 6px;
+}
 button {
     padding: 6px 10px;
     border: none;
     border-radius: 4px;
     cursor: pointer;
 }
-.edit { background: #ffc107; }
-.delete { background: #dc3545; color: white; }
+.edit {
+    background: #ffc107;
+}
+.delete {
+    background: #dc3545;
+    color: white;
+}
+.primary {
+    background: #2c7be5;
+    color: white;
+}
 
+/* SECCIONES */
 details {
     background: white;
     padding: 15px;
     border-radius: 8px;
-    margin-top: 20px;
+    margin-bottom: 20px;
 }
 </style>
 </head>
-
 <body>
 
+{% if not user %}
+<!-- ================= LOGIN ================= -->
+<div class="login-box">
+    <h2>Iniciar sesión</h2>
+    <form method="post" action="/login">
+        <input name="username" placeholder="Usuario" required>
+        <input type="password" name="password" placeholder="Contraseña" required>
+        <button class="primary">Entrar</button>
+    </form>
+</div>
+
+{% else %}
+
 <h1>Dominó</h1>
+
+<p style="text-align:center;">
+    Sesión iniciada como <b>{{ user }}</b>
+    |
+    <a href="/logout">Cerrar sesión</a>
+</p>
 
 <!-- ================= EQUIPOS ================= -->
 <h2>Equipos</h2>
 <div class="teams">
 {% for t in teams %}
-<div class="team-card">
-    <div class="team-name">{{ t[1] }}</div>
-    <div class="team-points">{{ t[2] }}</div>
-    <div class="team-wins">🏆 Partidas ganadas: {{ t[3] }}</div>
+    <div class="team-card">
+        <div class="team-name">{{ t.name }}</div>
+        <div class="team-points">{{ t.points }}</div>
+        <div class="team-wins">🏆 Partidas ganadas: {{ t.wins }}</div>
 
-    <form method="post" action="/edit_team_points"
-          onsubmit="return confirm('¿Cambiar puntos del equipo?');">
-        <input type="hidden" name="team_id" value="{{ t[0] }}">
-        <input type="number" name="points" placeholder="Nuevo puntaje" required>
-        <button class="edit">Editar</button>
-    </form>
+        <div class="team-actions">
+            <!-- EDITAR PUNTOS -->
+            <form method="post" action="/edit_team_points"
+                  onsubmit="return confirm('¿Cambiar los puntos de este equipo?');">
+                <input type="hidden" name="team_id" value="{{ t.id }}">
+                <input type="number" name="points" placeholder="Nuevo puntaje" required>
+                <button class="edit">Editar</button>
+            </form>
 
-    <form method="post" action="/delete_team"
-          onsubmit="return confirm('¿Eliminar equipo y su historial?');">
-        <input type="hidden" name="team_id" value="{{ t[0] }}">
-        <button class="delete">Eliminar</button>
-    </form>
-</div>
+            <!-- ELIMINAR EQUIPO -->
+            <form method="post" action="/delete_team"
+                  onsubmit="return confirm('¿Eliminar este equipo y todo su historial?');">
+                <input type="hidden" name="team_id" value="{{ t.id }}">
+                <button class="delete">Eliminar</button>
+            </form>
+        </div>
+    </div>
 {% endfor %}
 </div>
 
@@ -87,37 +144,41 @@ details {
 <summary>➕ Crear equipo</summary>
 <form method="post" action="/add_team">
     <input name="name" placeholder="Nombre del equipo" required>
-    <button>Crear</button>
+    <button class="primary">Crear</button>
 </form>
 </details>
 
 <!-- ================= PARTIDA ================= -->
 <details open>
-<summary>🎯 Nueva partida</summary>
+<summary>🎯 Partida</summary>
 <form method="post" action="/add_match">
     <select name="team_id" required>
         <option value="">Elegir equipo</option>
         {% for t in teams %}
-        <option value="{{ t[0] }}">{{ t[1] }}</option>
+            <option value="{{ t.id }}">{{ t.name }}</option>
         {% endfor %}
-    </select><br><br>
-
-    <input type="number" name="points" placeholder="Puntos" required><br><br>
-    <button>Actualizar</button>
+    </select>
+    <br><br>
+    <input type="number" name="points" placeholder="Puntos" required>
+    <br><br>
+    <button class="primary">Actualizar</button>
 </form>
+<p style="font-size:13px;color:#555;">
+    ℹ️ Al llegar a 200 puntos se suma una partida ganada y el contador vuelve a 0.
+</p>
 </details>
 
 <!-- ================= HISTORIAL ================= -->
 <details>
 <summary>📜 Historial</summary>
 {% for m in matches %}
-<p>Equipo {{ m[1] }} +{{ m[2] }} puntos</p>
+    <p>Equipo {{ m.team_name }} +{{ m.points }} puntos</p>
 {% endfor %}
 </details>
 
+{% endif %}
+
 </body>
 </html>
-
-
 
 
