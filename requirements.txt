@@ -1,29 +1,23 @@
-# ====== CORE DEPENDENCIES ======
-Flask==3.0.0
-Jinja2==3.1.2
-Werkzeug==3.0.1
+# ====== CORE ======
+Flask>=3.0.0
+Jinja2>=3.1.0
+Werkzeug>=3.0.0
 
 # ====== DATABASE ======
-psycopg2-binary==2.9.9
+psycopg2-binary>=2.9.0
 
 # ====== YOLO + VISION (CPU-ONLY) ======
-# IMPORTANTE: Usar torch CPU para evitar instalación pesada
 --extra-index-url https://download.pytorch.org/whl/cpu
-torch==2.1.0+cpu
-torchvision==0.16.0+cpu
+torch>=2.5.0,<3.0.0
+torchvision>=0.20.0,<1.0.0
 
-# Ultralytics con dependencias mínimas
-ultralytics==8.1.0
+ultralytics>=8.3.0
 
-# OpenCV headless (sin GUI, más liviano)
-opencv-python-headless==4.8.1.78
+opencv-python-headless>=4.10.0
 
 # ====== UTILITIES ======
-numpy==1.24.3
-Pillow==10.1.0
+numpy<2.0.0
+Pillow>=10.0.0
 
-# ====== OPTIONAL (environment variables) ======
-python-dotenv==1.0.0
-
-# ====== PRODUCTION SERVER (opcional) ======
-gunicorn==21.2.0
+# ====== SERVER ======
+gunicorn>=21.0.0
