@@ -15,6 +15,7 @@ h1 {
     text-align: center;
 }
 
+/* EQUIPOS */
 .teams {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -41,6 +42,7 @@ h1 {
     margin: 10px 0;
 }
 
+/* BOTONES */
 .team-actions form {
     margin-top: 5px;
 }
@@ -61,6 +63,7 @@ button {
     color: white;
 }
 
+/* SECCIONES */
 details {
     background: white;
     padding: 15px;
@@ -72,10 +75,11 @@ details {
 
 <body>
 
-<h1> Dominó</h1>
+<h1>🁢 Dominó</h1>
 
-<!-- EQUIPOS SIEMPRE VISIBLES -->
-<h2> Equipos</h2>
+<!-- ================= EQUIPOS (SIEMPRE VISIBLES) ================= -->
+<h2>Equipos</h2>
+
 <div class="teams">
 {% for t in teams %}
     <div class="team-card">
@@ -84,15 +88,16 @@ details {
 
         <div class="team-actions">
             <!-- EDITAR PUNTOS -->
-            <form method="post" action="/edit_team_points">
+            <form method="post" action="/edit_team_points"
+                  onsubmit="return confirm('¿Seguro que quieres cambiar los puntos?');">
                 <input type="hidden" name="team_id" value="{{ t[0] }}">
                 <input type="number" name="points" placeholder="Nuevo puntaje" required>
                 <button class="edit">Editar</button>
             </form>
 
-            <!-- ELIMINAR -->
+            <!-- ELIMINAR EQUIPO -->
             <form method="post" action="/delete_team"
-                  onsubmit="return confirm('¿Eliminar equipo?');">
+                  onsubmit="return confirm('¿Eliminar este equipo y sus partidas?');">
                 <input type="hidden" name="team_id" value="{{ t[0] }}">
                 <button class="delete">Eliminar</button>
             </form>
@@ -101,7 +106,7 @@ details {
 {% endfor %}
 </div>
 
-<!-- CREAR EQUIPO -->
+<!-- ================= CREAR EQUIPO ================= -->
 <details>
 <summary>➕ Crear equipo</summary>
 <form method="post" action="/add_team">
@@ -110,28 +115,31 @@ details {
 </form>
 </details>
 
-<!-- PARTIDA ACTUAL -->
+<!-- ================= PARTIDA ACTUAL ================= -->
 <details open>
-<summary> Partida </summary>
-<form method="post" action="/add_match" enctype="multipart/form-data">
+<summary>🎯 Partida</summary>
+
+<form method="post" action="/add_match">
     <select name="team_id" required>
-        <option value="">elegir equipo</option>
+        <option value="">Elegir equipo perdedor</option>
         {% for t in teams %}
             <option value="{{ t[0] }}">{{ t[1] }}</option>
         {% endfor %}
     </select>
+
     <br><br>
+
     <input type="number" name="points" placeholder="Puntos" required>
+
     <br><br>
-    <input type="file" name="image" accept="image/*">
-    <br><br>
-    <button>actualizar</button>
+
+    <button>Actualizar</button>
 </form>
 </details>
 
-<!-- HISTORIAL -->
+<!-- ================= HISTORIAL ================= -->
 <details>
-<summary> Historial</summary>
+<summary>📜 Historial</summary>
 {% for m in matches %}
     <p>Equipo {{ m[1] }} +{{ m[2] }} puntos</p>
 {% endfor %}
