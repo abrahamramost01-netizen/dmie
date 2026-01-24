@@ -9,9 +9,6 @@
             background: #f4f4f4;
             padding: 20px;
         }
-        h1 {
-            margin-bottom: 20px;
-        }
         details {
             background: #fff;
             padding: 15px;
@@ -22,18 +19,16 @@
             font-weight: bold;
             cursor: pointer;
         }
-        form {
+        .card {
+            background: #fff;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 10px;
+        }
+        img {
             margin-top: 10px;
-        }
-        input, select, button {
-            margin-top: 8px;
-            padding: 6px;
-        }
-        ul {
-            padding-left: 20px;
-        }
-        li {
-            margin-bottom: 6px;
+            max-width: 250px;
+            border-radius: 4px;
         }
     </style>
 </head>
@@ -41,29 +36,28 @@
 
 <h1>🁢 Dominó</h1>
 
-<!-- EQUIPOS -->
-<details open>
-    <summary>Equipos</summary>
-    <ul>
-        {% for t in teams %}
-            <li>{{ t[1] }} – {{ t[2] }} puntos</li>
-        {% endfor %}
-    </ul>
+<!-- EQUIPOS (OCULTO) -->
+<details>
+    <summary>👥 Equipos</summary>
+    {% for t in teams %}
+        <div class="card">
+            {{ t[1] }} – {{ t[2] }} puntos
+        </div>
+    {% endfor %}
 </details>
 
-<!-- CREAR EQUIPO -->
+<!-- CREAR EQUIPO (OCULTO) -->
 <details>
     <summary>➕ Crear equipo</summary>
     <form method="post" action="/add_team">
         <input name="name" placeholder="Nombre del equipo" required>
-        <br>
         <button type="submit">Crear</button>
     </form>
 </details>
 
-<!-- NUEVA PARTIDA -->
-<details>
-    <summary>📝 Nueva partida</summary>
+<!-- PARTIDA ACTUAL (SIEMPRE VISIBLE) -->
+<details open>
+    <summary>🟢 Partida actual</summary>
     <form method="post" action="/add_match" enctype="multipart/form-data">
         <select name="team_id" required>
             <option value="">Equipo perdedor</option>
@@ -72,32 +66,39 @@
             {% endfor %}
         </select>
         <br>
-        <input name="points" type="number" placeholder="Cantidad de puntos" required>
+        <input type="number" name="points" placeholder="Puntos" required>
         <br>
         <input type="file" name="image" accept="image/*">
         <br>
-        <button type="submit">Aceptar</button>
+        <button type="submit">Guardar partida</button>
     </form>
 </details>
 
-<!-- HISTORIAL -->
-<details>
-    <summary>📜 Historial de partidas</summary>
-    <ul>
-        {% for m in matches %}
-            <li>
-                Equipo {{ m[1] }} +{{ m[2] }} puntos
-                {% if m[4] %}
-                    <br>
-                    <img src="/{{ m[4] }}" width="200">
-                {% endif %}
-            </li>
-        {% endfor %}
-    </ul>
-</details>
+<!-- ÚLTIMA PARTIDA (SIEMPRE VISIBLE) -->
+{% if matches %}
+<h2>Última partida</h2>
+<div class="card">
+    Equipo {{ matches[0][1] }} +{{ matches[0][2] }} puntos
+    {% if matches[0][4] %}
+        <br>
+        <img src="/{{ matches[0][4] }}">
+    {% endif %}
+</div>
+{% endif %}
 
-</body>
-</html>
+<!-- HISTORIAL ANTIGUO (OCULTO) -->
+<details>
+    <summary>📜 Historial anterior</summary>
+    {% for m in matches[1:] %}
+        <div class="card">
+            Equipo {{ m[1] }} +{{ m[2] }} puntos
+            {% if m[4] %}
+                <br>
+                <img src="/{{ m[4] }}">
+            {% endif %}
+        </div>
+    {% endfor %}
+</details>
 
 </body>
 </html>
