@@ -2,7 +2,7 @@ import os
 import uuid
 import json
 import psycopg2
-import cv2import os
+import cv2
 import uuid
 import json
 import psycopg2
@@ -168,6 +168,7 @@ def health():
 # ================== START ==================
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
+
 
 
 
