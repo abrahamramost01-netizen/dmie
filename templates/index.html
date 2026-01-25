@@ -1,20 +1,23 @@
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
-  <meta charset="utf-8">
-  <title>Test YOLO RAW</title>
+    <meta charset="UTF-8">
+    <title>Test Dominó IA</title>
 </head>
 <body>
-  <h2>Probar modelo</h2>
+    <h1>Prueba modelo ONNX (output crudo)</h1>
 
-  <form action="/add_match" method="post" enctype="multipart/form-data">
-    <input type="file" name="image" required>
-    <button type="submit">Enviar</button>
-  </form>
+    <form action="/add_match" method="POST" enctype="multipart/form-data">
+        <label>Team ID (usa uno que exista en DB):</label><br>
+        <input type="number" name="team_id" value="1" required><br><br>
 
-  <p>El resultado sale como JSON en el navegador.</p>
+        <input type="file" name="image" accept="image/*" required><br><br>
+
+        <button type="submit">Enviar imagen</button>
+    </form>
 </body>
 </html>
+
 
 
 
