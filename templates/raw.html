@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Test ONNX – Output crudo</title>
+    <style>
+        body { font-family: monospace; background: #111; color: #0f0; }
+        pre { background: #000; padding: 10px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+
+<h2>Subir imagen – Output crudo ONNX</h2>
+
+<form action="/raw_detect" method="post" enctype="multipart/form-data">
+    <input type="file" name="image" required>
+    <button type="submit">Detectar</button>
+</form>
+
+<p>El resultado saldrá como JSON puro.</p>
+
+</body>
+</html>
