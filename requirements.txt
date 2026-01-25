@@ -1,24 +1,30 @@
-# ===== WEB =====
+# ===============================
+# Flask + servidor
+# ===============================
 Flask==3.0.0
 gunicorn==21.2.0
 psycopg2-binary==2.9.9
 
-# ===== TORCH CPU ONLY (CLAVE) =====
---index-url https://download.pytorch.org/whl/cpu
-torch==2.5.1
-torchvision==0.20.1
+# ===============================
+# PyTorch CPU ONLY (SIN CUDA)
+# ===============================
+torch==2.2.2
+torchvision==0.17.2
 
-# ===== YOLO =====
+# ===============================
+# YOLO
+# ===============================
 ultralytics==8.3.0
-opencv-python-headless==4.10.0.84
 
-# ===== UTIL =====
+# ===============================
+# Visión / utilidades
+# ===============================
+opencv-python-headless==4.10.0.84
 numpy==1.26.4
 pillow==10.1.0
 pyyaml
 requests
 tqdm
 
-tqdm
 
 
