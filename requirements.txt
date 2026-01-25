@@ -1,20 +1,24 @@
-# ===== Web =====
-Flask
-gunicorn
-psycopg2-binary
+# ===== WEB =====
+Flask==3.0.0
+gunicorn==21.2.0
+psycopg2-binary==2.9.9
 
-# ===== PyTorch CPU (Railway-compatible) =====
-torch
-torchvision
+# ===== TORCH CPU ONLY (CLAVE) =====
+--index-url https://download.pytorch.org/whl/cpu
+torch==2.5.1
+torchvision==0.20.1
 
 # ===== YOLO =====
-ultralytics
-opencv-python-headless
+ultralytics==8.3.0
+opencv-python-headless==4.10.0.84
 
-# ===== Utils =====
-numpy
-pillow
+# ===== UTIL =====
+numpy==1.26.4
+pillow==10.1.0
 pyyaml
 requests
 tqdm
+
+tqdm
+
 
