@@ -1,23 +1,32 @@
 <!DOCTYPE html>
-<html lang="es">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <title>Test Dominó IA</title>
+  <meta charset="utf-8">
+  <title>Domino Debug</title>
 </head>
 <body>
-    <h1>Prueba modelo ONNX (output crudo)</h1>
+  <h2>Subir imagen</h2>
 
-    <form action="/add_match" method="POST" enctype="multipart/form-data">
-        <label>Team ID (usa uno que exista en DB):</label><br>
-        <input type="number" name="team_id" value="1" required><br><br>
+  <form id="f">
+    <input type="file" name="image" required>
+    <button>Enviar</button>
+  </form>
 
-        <input type="file" name="image" accept="image/*" required><br><br>
+  <pre id="out"></pre>
+  <img id="img" style="max-width:600px">
 
-        <button type="submit">Enviar imagen</button>
-    </form>
+  <script>
+    document.getElementById("f").onsubmit = async e => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const r = await fetch("/infer", { method:"POST", body:fd });
+      const j = await r.json();
+      document.getElementById("out").textContent = JSON.stringify(j, null, 2);
+      if (j.image) {
+        document.getElementById("img").src = "/processed/" + j.image;
+      }
+    };
+  </script>
 </body>
 </html>
-
-
-
 
