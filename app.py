@@ -4,131 +4,138 @@ import json
 import psycopg2
 import cv2
 import numpy as np
-from flask import Flask, render_template, request, redirect, url_for, send_from_directory
-from ultralytics import YOLO
+import onnxruntime as ort
 
-# ================== CONFIG ==================
+from flask import Flask, render_template, request, redirect, url_for, send_from_directory
+
+# ================= CONFIG =================
 UPLOAD_FOLDER = "uploads"
-PRED_FOLDER = "uploads/pred"
-MODEL_PATH = os.environ.get("MODEL_PATH", "best.onnx")
+MODEL_PATH = os.environ.get("MODEL_PATH", "model.onnx")
 WIN_POINTS = int(os.environ.get("WIN_POINTS", 200))
 
-CONF_THRES = 0.45
-IOU_THRES = 0.5
-
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-os.makedirs(PRED_FOLDER, exist_ok=True)
 
 app = Flask(__name__)
 
-# ================== CARGAR MODELO ==================
-print(f"🔧 Cargando modelo ONNX: {MODEL_PATH}")
-try:
-    model = YOLO(MODEL_PATH)
-    print("✅ Modelo ONNX cargado correctamente")
-except Exception as e:
-    print("❌ ERROR cargando modelo:", e)
-    model = None
-
-
-# ================== DB ==================
+# ================= DATABASE =================
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
 def get_db():
     return psycopg2.connect(DATABASE_URL, sslmode="require")
 
+# ================= LOAD ONNX MODEL =================
+print(f"🔧 Cargando modelo ONNX: {MODEL_PATH}")
 
-# ================== UTILIDADES ==================
+try:
+    session = ort.InferenceSession(
+        MODEL_PATH,
+        providers=["CPUExecutionProvider"]
+    )
+    input_name = session.get_inputs()[0].name
+    print("✅ Modelo ONNX cargado correctamente")
+except Exception as e:
+    print("❌ Error cargando ONNX:", e)
+    session = None
+
+# ================= UTILS =================
 def iou(box1, box2):
-    x1 = max(box1[0], box2[0])
-    y1 = max(box1[1], box2[1])
-    x2 = min(box1[2], box2[2])
-    y2 = min(box1[3], box2[3])
+    x1, y1, x2, y2 = box1
+    x1b, y1b, x2b, y2b = box2
 
-    inter = max(0, x2 - x1) * max(0, y2 - y1)
-    a1 = (box1[2] - box1[0]) * (box1[3] - box1[1])
-    a2 = (box2[2] - box2[0]) * (box2[3] - box2[1])
-    union = a1 + a2 - inter
+    xi1 = max(x1, x1b)
+    yi1 = max(y1, y1b)
+    xi2 = min(x2, x2b)
+    yi2 = min(y2, y2b)
+
+    inter = max(0, xi2 - xi1) * max(0, yi2 - yi1)
+    union = (x2 - x1) * (y2 - y1) + (x2b - x1b) * (y2b - y1b) - inter
     return inter / union if union > 0 else 0
 
+def nms(detections, iou_thresh=0.5):
+    detections = sorted(detections, key=lambda x: x["conf"], reverse=True)
+    final = []
 
-def fusionar_cajas(detecciones):
-    detecciones = sorted(detecciones, key=lambda x: x["conf"], reverse=True)
-    resultado = []
+    while detections:
+        best = detections.pop(0)
+        final.append(best)
+        detections = [
+            d for d in detections
+            if iou(best["box"], d["box"]) < iou_thresh
+        ]
+    return final
 
-    for det in detecciones:
-        solapa = False
-        for r in resultado:
-            if iou(det["box"], r["box"]) > IOU_THRES:
-                solapa = True
-                break
-        if not solapa:
-            resultado.append(det)
-
-    return resultado
-
-
-# ================== YOLO DOMINÓ ==================
+# ================= DETECTION =================
 def calcular_puntos_domino(image_path):
-    if model is None:
+    if session is None:
         return {"total": 0, "cantidad": 0, "fichas": [], "error": "Modelo no cargado"}
 
     img = cv2.imread(image_path)
-    h, w = img.shape[:2]
+    h, w, _ = img.shape
 
-    results = model(image_path, conf=CONF_THRES, verbose=False)
+    blob = cv2.resize(img, (640, 640))
+    blob = blob.astype(np.float32) / 255.0
+    blob = np.transpose(blob, (2, 0, 1))
+    blob = np.expand_dims(blob, axis=0)
 
-    detecciones = []
+    outputs = session.run(None, {input_name: blob})[0]
 
-    for r in results:
-        for b in r.boxes:
-            cls = int(b.cls.item())
-            conf = float(b.conf.item())
-            x1, y1, x2, y2 = map(int, b.xyxy[0])
+    detections = []
 
-            detecciones.append({
-                "clase": cls,
-                "puntos": cls,  # DOBLE NUEVE → clase = puntos
-                "conf": conf,
-                "box": [x1, y1, x2, y2]
-            })
+    for det in outputs:
+        conf = float(det[4])
+        if conf < 0.5:
+            continue
 
-    # 🔥 FUSIÓN DE CAJAS
-    detecciones = fusionar_cajas(detecciones)
+        cls = int(np.argmax(det[5:]))
+        x, y, bw, bh = det[:4]
 
-    # 🖌️ DIBUJAR CAJAS
-    for d in detecciones:
-        x1, y1, x2, y2 = d["box"]
-        label = f"{d['puntos']} ({int(d['conf']*100)}%)"
+        x1 = int((x - bw / 2) * w)
+        y1 = int((y - bh / 2) * h)
+        x2 = int((x + bw / 2) * w)
+        y2 = int((y + bh / 2) * h)
 
-        cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 2)
+        detections.append({
+            "box": (x1, y1, x2, y2),
+            "class": cls,
+            "conf": conf
+        })
+
+    detections = nms(detections)
+
+    total = 0
+    fichas = []
+
+    for d in detections:
+        puntos = d["class"]  # domino doble-9 → clase = puntos
+        total += puntos
+
+        fichas.append({
+            "puntos": puntos,
+            "confianza": round(d["conf"] * 100, 1)
+        })
+
+        cv2.rectangle(img, d["box"][:2], d["box"][2:], (0, 255, 0), 2)
         cv2.putText(
-            img, label, (x1, y1 - 10),
-            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2
+            img,
+            f"{puntos}",
+            (d["box"][0], d["box"][1] - 5),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.7,
+            (0, 255, 0),
+            2
         )
 
-    pred_name = f"pred_{os.path.basename(image_path)}"
-    pred_path = os.path.join(PRED_FOLDER, pred_name)
-    cv2.imwrite(pred_path, img)
-
-    total = sum(d["puntos"] for d in detecciones)
+    out_path = image_path.replace(".", "_det.")
+    cv2.imwrite(out_path, img)
 
     return {
         "total": total,
-        "cantidad": len(detecciones),
-        "imagen_pred": pred_path,
-        "fichas": [
-            {
-                "puntos": d["puntos"],
-                "confianza": round(d["conf"] * 100, 1),
-                "box": d["box"]
-            }
-            for d in detecciones
-        ]
+        "cantidad": len(fichas),
+        "fichas": fichas,
+        "image_debug": out_path
     }
 
-
-# ================== RUTAS ==================
+# ================= ROUTES =================
 @app.route("/")
 def index():
     conn = get_db()
@@ -150,15 +157,13 @@ def index():
 
     return render_template("index.html", teams=teams, matches=matches, win_points=WIN_POINTS)
 
-
 @app.route("/add_match", methods=["POST"])
 def add_match():
     team_id = int(request.form["team_id"])
     image = request.files["image"]
 
-    ext = os.path.splitext(image.filename)[1].lower()
-    name = f"{uuid.uuid4()}{ext}"
-    path = os.path.join(UPLOAD_FOLDER, name)
+    filename = f"{uuid.uuid4()}.jpg"
+    path = os.path.join(UPLOAD_FOLDER, filename)
     image.save(path)
 
     resultado = calcular_puntos_domino(path)
@@ -172,14 +177,12 @@ def add_match():
     """, (
         team_id,
         resultado["total"],
-        resultado.get("imagen_pred", path),
+        resultado.get("image_debug", path),
         json.dumps(resultado)
     ))
 
-    cur.execute(
-        "UPDATE teams SET points = points + %s WHERE id = %s",
-        (resultado["total"], team_id)
-    )
+    cur.execute("UPDATE teams SET points = points + %s WHERE id = %s",
+                (resultado["total"], team_id))
 
     conn.commit()
     cur.close()
@@ -187,24 +190,12 @@ def add_match():
 
     return redirect(url_for("index"))
 
-
-@app.route("/uploads/<path:filename>")
+@app.route("/uploads/<filename>")
 def uploads(filename):
-    return send_from_directory(".", filename)
+    return send_from_directory(UPLOAD_FOLDER, filename)
 
-
-@app.route("/health")
-def health():
-    return {
-        "status": "ok",
-        "model": model is not None
-    }
-
-
-# ================== MAIN ==================
+# ================= START =================
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port)
-
-
 
