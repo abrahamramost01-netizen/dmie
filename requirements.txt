@@ -1,31 +1,20 @@
-# ====== CORE ======
-Flask
-psycopg2-binary
-gunicorn
+# Core (instalar primero)
+Flask==3.0.0
+psycopg2-binary==2.9.9
+gunicorn==21.2.0
 
-# ====== YOLO LITE (sin PyTorch pesado) ======
-# Usar solo las dependencias mínimas
+# PyTorch CPU-only (separado para mejor cache)
+--find-links https://download.pytorch.org/whl/cpu/torch_stable.html
+torch==2.5.1+cpu
+torchvision==0.20.1+cpu
 
-torch
-torchvision
+# YOLO y visión
+ultralytics==8.3.0
+opencv-python-headless==4.10.0.84
 
-ultralytics
-
-# OpenCV minimal
-opencv-python-headless
-
-# Dependencias mínimas de torch
-filelock
-typing-extensions
-sympy
-networkx
-jinja2
-fsspec
-
-numpy
-pillow
+# Utilidades básicas
+numpy==1.26.4
+pillow==10.1.0
 pyyaml
 requests
 tqdm
-
-
