@@ -1,49 +1,30 @@
 <!DOCTYPE html>
-<html lang="es">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <title>Test ONNX Dominó</title>
-    <style>
-        body { font-family: Arial; padding: 20px; }
-        pre { background: #111; color: #0f0; padding: 10px; }
-        img { max-width: 500px; margin-top: 10px; }
-    </style>
+    <meta charset="utf-8">
+    <title>YOLO Raw Test</title>
 </head>
 <body>
+    <h2>Subir imagen</h2>
 
-<h2>Prueba modelo ONNX (output crudo)</h2>
+    <form id="f">
+        <input type="file" name="image" required>
+        <button>Enviar</button>
+    </form>
 
-<form id="form">
-    <input type="file" name="image" required>
-    <button type="submit">Enviar</button>
-</form>
+    <pre id="out"></pre>
+    <img id="img" style="max-width:500px">
 
-<h3>JSON</h3>
-<pre id="out"></pre>
-
-<h3>Imagen procesada</h3>
-<img id="img">
-
-<script>
-document.getElementById("form").onsubmit = async (e) => {
-    e.preventDefault();
-    const fd = new FormData(e.target);
-
-    const res = await fetch("/infer", {
-        method: "POST",
-        body: fd
-    });
-
-    const data = await res.json();
-    document.getElementById("out").textContent =
-        JSON.stringify(data, null, 2);
-
-    if (data.image) {
-        document.getElementById("img").src =
-            "/processed/" + data.image;
-    }
-};
-</script>
-
+    <script>
+        document.getElementById("f").onsubmit = async (e) => {
+            e.preventDefault();
+            const fd = new FormData(e.target);
+            const r = await fetch("/detect", { method:"POST", body: fd });
+            const j = await r.json();
+            document.getElementById("out").textContent = JSON.stringify(j, null, 2);
+            document.getElementById("img").src = "/processed/" + j.image;
+        }
+    </script>
 </body>
 </html>
+
