@@ -4,58 +4,76 @@ import json
 import psycopg2
 import cv2
 import numpy as np
-import onnxruntime as ort
-
 from flask import Flask, render_template, request, redirect, url_for, send_from_directory
 
-# ================== CONFIG ==================
+# ================= CONFIG =================
 UPLOAD_FOLDER = "uploads"
-MODEL_PATH = os.environ.get("MODEL_PATH", "best.onnx")
 WIN_POINTS = int(os.environ.get("WIN_POINTS", 200))
-CONF_THRESHOLD = 0.5
-IMG_SIZE = 640
+MODEL_PATH = os.environ.get("MODEL_PATH", "best.onnx")
+CONF_THRESHOLD = 0.45
+IOU_THRESHOLD = 0.5
 
 app = Flask(__name__)
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# ================== DATABASE ==================
+# ================= CARGAR MODELO ONNX =================
+print(f"🔧 Cargando modelo ONNX desde: {MODEL_PATH}")
+
+try:
+    net = cv2.dnn.readNetFromONNX(MODEL_PATH)
+    model_loaded = True
+    print("✅ Modelo ONNX cargado correctamente")
+except Exception as e:
+    print(f"❌ Error cargando ONNX: {e}")
+    net = None
+    model_loaded = False
+
+
+# ================= DB =================
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
 def get_db():
     return psycopg2.connect(DATABASE_URL, sslmode="require")
 
-# ================== LOAD ONNX MODEL ==================
-print(f"🔧 Cargando modelo ONNX: {MODEL_PATH}")
 
-try:
-    session = ort.InferenceSession(
-        MODEL_PATH,
-        providers=["CPUExecutionProvider"]
-    )
-    input_name = session.get_inputs()[0].name
-    output_name = session.get_outputs()[0].name
-    print("✅ Modelo ONNX cargado correctamente")
-except Exception as e:
-    print(f"❌ Error cargando ONNX: {e}")
-    session = None
+# ================= UTILIDADES =================
+def iou(box1, box2):
+    x1, y1, w1, h1 = box1
+    x2, y2, w2, h2 = box2
 
-# ================== YOLO ONNX UTILS ==================
-def preprocess(image_path):
-    img = cv2.imread(image_path)
-    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    img = cv2.resize(img, (IMG_SIZE, IMG_SIZE))
-    img = img.astype(np.float32) / 255.0
-    img = np.transpose(img, (2, 0, 1))
-    img = np.expand_dims(img, axis=0)
-    return img
+    xa = max(x1, x2)
+    ya = max(y1, y2)
+    xb = min(x1 + w1, x2 + w2)
+    yb = min(y1 + h1, y2 + h2)
 
+    inter = max(0, xb - xa) * max(0, yb - ya)
+    union = (w1 * h1) + (w2 * h2) - inter
+
+    return inter / union if union > 0 else 0
+
+
+def fusionar_cajas(detecciones):
+    """
+    Fusiona detecciones solapadas para evitar contar fichas duplicadas
+    """
+    detecciones = sorted(detecciones, key=lambda x: x["confianza"], reverse=True)
+    resultado = []
+
+    for det in detecciones:
+        duplicada = False
+        for r in resultado:
+            if iou(det["bbox"], r["bbox"]) > IOU_THRESHOLD:
+                duplicada = True
+                break
+        if not duplicada:
+            resultado.append(det)
+
+    return resultado
+
+
+# ================= YOLO ONNX =================
 def calcular_puntos_domino(image_path):
-    """
-    Detecta fichas de dominó usando YOLO con fusión de cajas
-    para evitar contar fichas duplicadas.
-    """
-
-    if model is None:
+    if not model_loaded or net is None:
         return {
             "total": 0,
             "cantidad": 0,
@@ -63,92 +81,62 @@ def calcular_puntos_domino(image_path):
             "error": "Modelo no cargado"
         }
 
-    try:
-        results = model(image_path, conf=0.25, iou=0.7, verbose=False)
+    image = cv2.imread(image_path)
+    h, w = image.shape[:2]
 
-        detecciones = []
+    blob = cv2.dnn.blobFromImage(
+        image,
+        scalefactor=1 / 255.0,
+        size=(640, 640),
+        swapRB=True,
+        crop=False
+    )
 
-        # ===============================
-        # 1️⃣ Extraer detecciones crudas
-        # ===============================
-        for r in results:
-            for box in r.boxes:
-                x1, y1, x2, y2 = box.xyxy[0].tolist()
-                cls = int(box.cls.item())
-                conf = float(box.conf.item())
+    net.setInput(blob)
+    outputs = net.forward()[0]
 
-                detecciones.append({
-                    "bbox": (x1, y1, x2, y2),
-                    "clase": cls,
-                    "conf": conf
-                })
+    detecciones = []
 
-        # ===============================
-        # 2️⃣ Función IoU
-        # ===============================
-        def iou(boxA, boxB):
-            xA = max(boxA[0], boxB[0])
-            yA = max(boxA[1], boxB[1])
-            xB = min(boxA[2], boxB[2])
-            yB = min(boxA[3], boxB[3])
+    for det in outputs:
+        scores = det[5:]
+        class_id = int(np.argmax(scores))
+        confidence = scores[class_id]
 
-            interW = max(0, xB - xA)
-            interH = max(0, yB - yA)
-            interArea = interW * interH
+        if confidence < CONF_THRESHOLD:
+            continue
 
-            boxAArea = (boxA[2] - boxA[0]) * (boxA[3] - boxA[1])
-            boxBArea = (boxB[2] - boxB[0]) * (boxB[3] - boxB[1])
+        cx, cy, bw, bh = det[0:4]
+        x = int((cx - bw / 2) * w / 640)
+        y = int((cy - bh / 2) * h / 640)
+        bw = int(bw * w / 640)
+        bh = int(bh * h / 640)
 
-            union = boxAArea + boxBArea - interArea
-            return interArea / union if union > 0 else 0
+        detecciones.append({
+            "clase": class_id,
+            "puntos": class_id,  # doble nueve: clase == puntos
+            "confianza": round(float(confidence) * 100, 1),
+            "bbox": (x, y, bw, bh)
+        })
 
-        # ===============================
-        # 3️⃣ Fusión de cajas (anti-duplicados)
-        # ===============================
-        detecciones.sort(key=lambda x: x["conf"], reverse=True)
-        fichas_finales = []
+    # 🔥 FUSIÓN DE CAJAS
+    detecciones = fusionar_cajas(detecciones)
 
-        for det in detecciones:
-            duplicada = False
-            for f in fichas_finales:
-                if iou(det["bbox"], f["bbox"]) > 0.5:
-                    duplicada = True
-                    break
-            if not duplicada:
-                fichas_finales.append(det)
+    total = sum(d["puntos"] for d in detecciones)
 
-        # ===============================
-        # 4️⃣ Cálculo de puntos
-        # ===============================
-        total = 0
-        fichas = []
-
-        for f in fichas_finales:
-            puntos = f["clase"]  # 👈 AJUSTA si tu dataset usa otro mapeo
-            total += puntos
-
-            fichas.append({
-                "clase": f["clase"],
-                "puntos": puntos,
-                "confianza": round(f["conf"] * 100, 1)
-            })
-
-        return {
-            "total": total,
-            "cantidad": len(fichas),
-            "fichas": fichas
-        }
-
-    except Exception as e:
-        return {
-            "total": 0,
-            "cantidad": 0,
-            "fichas": [],
-            "error": str(e)
-        }
+    return {
+        "total": total,
+        "cantidad": len(detecciones),
+        "fichas": [
+            {
+                "clase": d["clase"],
+                "puntos": d["puntos"],
+                "confianza": d["confianza"]
+            } for d in detecciones
+        ]
+    }
 
 
-# ================== ROUTES ==================
+# ================= RUTAS =================
 @app.route("/")
 def index():
     conn = get_db()
@@ -175,86 +163,69 @@ def index():
         win_points=WIN_POINTS
     )
 
-@app.route("/add_team", methods=["POST"])
-def add_team():
-    name = request.form.get("name", "").strip()
-    if not name:
-        return redirect(url_for("index"))
-
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute("INSERT INTO teams (name) VALUES (%s)", (name,))
-    conn.commit()
-    cur.close()
-    conn.close()
-
-    return redirect(url_for("index"))
-
-@app.route("/delete_team", methods=["POST"])
-def delete_team():
-    team_id = int(request.form.get("team_id"))
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute("DELETE FROM teams WHERE id = %s", (team_id,))
-    conn.commit()
-    cur.close()
-    conn.close()
-    return redirect(url_for("index"))
 
 @app.route("/add_match", methods=["POST"])
 def add_match():
-    team_id = int(request.form.get("team_id"))
-    image = request.files.get("image")
+    try:
+        team_id = int(request.form.get("team_id"))
+        image = request.files.get("image")
 
-    if not image:
-        return redirect(url_for("index"))
+        if not image:
+            return redirect(url_for("index"))
 
-    ext = os.path.splitext(image.filename)[1].lower()
-    if ext not in [".jpg", ".jpeg", ".png"]:
-        return redirect(url_for("index"))
+        ext = os.path.splitext(image.filename)[1].lower()
+        if ext not in [".jpg", ".jpeg", ".png"]:
+            return redirect(url_for("index"))
 
-    filename = f"{uuid.uuid4()}{ext}"
-    path = os.path.join(UPLOAD_FOLDER, filename)
-    image.save(path)
+        filename = f"{uuid.uuid4()}{ext}"
+        path = os.path.join(UPLOAD_FOLDER, filename)
+        image.save(path)
 
-    resultado = calcular_puntos_domino(path)
+        resultado = calcular_puntos_domino(path)
 
-    conn = get_db()
-    cur = conn.cursor()
+        conn = get_db()
+        cur = conn.cursor()
 
-    cur.execute("""
-        INSERT INTO matches (team_id, points, image_path, details)
-        VALUES (%s, %s, %s, %s)
-    """, (
-        team_id,
-        resultado["total"],
-        path,
-        json.dumps(resultado)
-    ))
+        cur.execute("""
+            INSERT INTO matches (team_id, points, image_path, details)
+            VALUES (%s, %s, %s, %s)
+        """, (
+            team_id,
+            resultado["total"],
+            path,
+            json.dumps(resultado)
+        ))
 
-    cur.execute("""
-        UPDATE teams SET points = points + %s WHERE id = %s
-    """, (resultado["total"], team_id))
+        cur.execute("""
+            UPDATE teams SET points = points + %s WHERE id = %s
+        """, (resultado["total"], team_id))
 
-    conn.commit()
-    cur.close()
-    conn.close()
+        conn.commit()
+        cur.close()
+        conn.close()
+
+    except Exception as e:
+        print("❌ Error add_match:", e)
 
     return redirect(url_for("index"))
+
 
 @app.route("/uploads/<filename>")
 def uploads(filename):
     return send_from_directory(UPLOAD_FOLDER, filename)
 
+
 @app.route("/health")
 def health():
     return {
         "status": "ok",
-        "onnx_loaded": session is not None
+        "model_loaded": model_loaded
     }
 
-# ================== START ==================
+
+# ================= MAIN =================
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port)
+
 
