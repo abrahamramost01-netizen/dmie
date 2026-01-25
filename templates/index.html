@@ -2,95 +2,79 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Debug IA Dominó</title>
+    <title>🁢 Test IA Dominó</title>
     <style>
         body {
             font-family: Arial, sans-serif;
-            background: #f4f6f8;
-            padding: 20px;
+            background: #111;
+            color: #eee;
+            padding: 30px;
         }
-        h1 {
-            color: #333;
-        }
-        .box {
-            background: white;
+        h1 { color: #4caf50; }
+        form {
+            background: #1e1e1e;
             padding: 20px;
             border-radius: 8px;
-            margin-bottom: 20px;
-            box-shadow: 0 4px 10px rgba(0,0,0,.1);
+            max-width: 500px;
+        }
+        input, button, select {
+            width: 100%;
+            padding: 10px;
+            margin-top: 10px;
         }
         button {
-            padding: 10px 20px;
-            background: #4f46e5;
-            color: white;
+            background: #4caf50;
             border: none;
-            border-radius: 6px;
+            font-weight: bold;
             cursor: pointer;
-            font-size: 16px;
+        }
+        pre {
+            background: #000;
+            padding: 15px;
+            margin-top: 20px;
+            overflow-x: auto;
         }
         img {
             max-width: 100%;
             margin-top: 15px;
-            border-radius: 6px;
-            border: 2px solid #ddd;
-        }
-        pre {
-            background: #111;
-            color: #0f0;
-            padding: 15px;
-            border-radius: 6px;
-            overflow-x: auto;
-            font-size: 14px;
-        }
-        .ficha {
-            padding: 8px;
-            margin: 5px 0;
-            background: #f1f5f9;
-            border-radius: 5px;
+            border: 2px solid #333;
         }
     </style>
 </head>
 <body>
 
-<h1>🧠 Debug IA – Dominó Doble Nueve</h1>
+<h1>🧠 Test IA Dominó (ONNX)</h1>
 
-<div class="box">
-    <h2>📤 Subir imagen</h2>
-    <form method="post" action="/debug_ia" enctype="multipart/form-data">
-        <input type="file" name="image" accept="image/*" required>
-        <br><br>
-        <button type="submit">Analizar imagen</button>
-    </form>
-</div>
+<form method="POST" action="/add_match" enctype="multipart/form-data">
+    <label>Equipo (ID numérico)</label>
+    <input type="number" name="team_id" value="1" required>
 
-{% if image_url %}
-<div class="box">
-    <h2>📸 Imagen analizada</h2>
-    <img src="{{ image_url }}">
-</div>
+    <label>Imagen de las fichas</label>
+    <input type="file" name="image" accept="image/*" required>
+
+    <button type="submit">📸 Analizar imagen</button>
+</form>
+
+{% if matches %}
+<hr>
+<h2>Último resultado</h2>
+
+{% set m = matches[0] %}
+
+<p><strong>Equipo:</strong> {{ m[1] }}</p>
+<p><strong>Puntos:</strong> {{ m[2] }}</p>
+
+{% if m[3] %}
+<img src="{{ url_for('uploads', filename=m[3].split('/')[-1]) }}">
 {% endif %}
 
-{% if result %}
-<div class="box">
-    <h2>📊 Resultado resumido</h2>
-    <p><strong>Total puntos:</strong> {{ result.total }}</p>
-    <p><strong>Cantidad fichas:</strong> {{ result.cantidad }}</p>
+{% if m[4] %}
+<h3>JSON IA</h3>
+<pre>{{ m[4] }}</pre>
+{% endif %}
 
-    <h3>🎯 Fichas detectadas</h3>
-    {% for f in result.fichas %}
-        <div class="ficha">
-            Ficha: <strong>{{ f.clase }}</strong> |
-            Puntos: <strong>{{ f.puntos }}</strong> |
-            Confianza: <strong>{{ f.confianza }}%</strong>
-        </div>
-    {% endfor %}
-</div>
-
-<div class="box">
-    <h2>🧾 JSON completo (debug)</h2>
-    <pre>{{ result | tojson(indent=2) }}</pre>
-</div>
 {% endif %}
 
 </body>
 </html>
+
