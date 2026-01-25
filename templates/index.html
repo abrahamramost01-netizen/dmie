@@ -1,80 +1,20 @@
 <!DOCTYPE html>
-<html lang="es">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <title>🁢 Test IA Dominó</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background: #111;
-            color: #eee;
-            padding: 30px;
-        }
-        h1 { color: #4caf50; }
-        form {
-            background: #1e1e1e;
-            padding: 20px;
-            border-radius: 8px;
-            max-width: 500px;
-        }
-        input, button, select {
-            width: 100%;
-            padding: 10px;
-            margin-top: 10px;
-        }
-        button {
-            background: #4caf50;
-            border: none;
-            font-weight: bold;
-            cursor: pointer;
-        }
-        pre {
-            background: #000;
-            padding: 15px;
-            margin-top: 20px;
-            overflow-x: auto;
-        }
-        img {
-            max-width: 100%;
-            margin-top: 15px;
-            border: 2px solid #333;
-        }
-    </style>
+  <meta charset="utf-8">
+  <title>Test YOLO RAW</title>
 </head>
 <body>
+  <h2>Probar modelo</h2>
 
-<h1>🧠 Test IA Dominó (ONNX)</h1>
+  <form action="/add_match" method="post" enctype="multipart/form-data">
+    <input type="file" name="image" required>
+    <button type="submit">Enviar</button>
+  </form>
 
-<form method="POST" action="/add_match" enctype="multipart/form-data">
-    <label>Equipo (ID numérico)</label>
-    <input type="number" name="team_id" value="1" required>
-
-    <label>Imagen de las fichas</label>
-    <input type="file" name="image" accept="image/*" required>
-
-    <button type="submit">📸 Analizar imagen</button>
-</form>
-
-{% if matches %}
-<hr>
-<h2>Último resultado</h2>
-
-{% set m = matches[0] %}
-
-<p><strong>Equipo:</strong> {{ m[1] }}</p>
-<p><strong>Puntos:</strong> {{ m[2] }}</p>
-
-{% if m[3] %}
-<img src="{{ url_for('uploads', filename=m[3].split('/')[-1]) }}">
-{% endif %}
-
-{% if m[4] %}
-<h3>JSON IA</h3>
-<pre>{{ m[4] }}</pre>
-{% endif %}
-
-{% endif %}
-
+  <p>El resultado sale como JSON en el navegador.</p>
 </body>
 </html>
+
+
 
