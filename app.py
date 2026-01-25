@@ -50,31 +50,87 @@ def preprocess(image_path):
     return img
 
 def calcular_puntos_domino(image_path):
-    if session is None:
-        return {"total": 0, "cantidad": 0, "fichas": [], "error": "Modelo no cargado"}
+    """
+    Detecta fichas de dominó usando YOLO con fusión de cajas
+    para evitar contar fichas duplicadas.
+    """
+
+    if model is None:
+        return {
+            "total": 0,
+            "cantidad": 0,
+            "fichas": [],
+            "error": "Modelo no cargado"
+        }
 
     try:
-        img = preprocess(image_path)
-        outputs = session.run([output_name], {input_name: img})[0]
+        results = model(image_path, conf=0.25, iou=0.7, verbose=False)
 
-        fichas = []
+        detecciones = []
+
+        # ===============================
+        # 1️⃣ Extraer detecciones crudas
+        # ===============================
+        for r in results:
+            for box in r.boxes:
+                x1, y1, x2, y2 = box.xyxy[0].tolist()
+                cls = int(box.cls.item())
+                conf = float(box.conf.item())
+
+                detecciones.append({
+                    "bbox": (x1, y1, x2, y2),
+                    "clase": cls,
+                    "conf": conf
+                })
+
+        # ===============================
+        # 2️⃣ Función IoU
+        # ===============================
+        def iou(boxA, boxB):
+            xA = max(boxA[0], boxB[0])
+            yA = max(boxA[1], boxB[1])
+            xB = min(boxA[2], boxB[2])
+            yB = min(boxA[3], boxB[3])
+
+            interW = max(0, xB - xA)
+            interH = max(0, yB - yA)
+            interArea = interW * interH
+
+            boxAArea = (boxA[2] - boxA[0]) * (boxA[3] - boxA[1])
+            boxBArea = (boxB[2] - boxB[0]) * (boxB[3] - boxB[1])
+
+            union = boxAArea + boxBArea - interArea
+            return interArea / union if union > 0 else 0
+
+        # ===============================
+        # 3️⃣ Fusión de cajas (anti-duplicados)
+        # ===============================
+        detecciones.sort(key=lambda x: x["conf"], reverse=True)
+        fichas_finales = []
+
+        for det in detecciones:
+            duplicada = False
+            for f in fichas_finales:
+                if iou(det["bbox"], f["bbox"]) > 0.5:
+                    duplicada = True
+                    break
+            if not duplicada:
+                fichas_finales.append(det)
+
+        # ===============================
+        # 4️⃣ Cálculo de puntos
+        # ===============================
         total = 0
+        fichas = []
 
-        # YOLOv8 output: (1, N, 6) → x, y, w, h, conf, class
-        for det in outputs[0]:
-            conf = float(det[4])
-            cls = int(det[5])
-
-            if conf < CONF_THRESHOLD:
-                continue
-
-            puntos = cls  # clase = puntos
+        for f in fichas_finales:
+            puntos = f["clase"]  # 👈 AJUSTA si tu dataset usa otro mapeo
             total += puntos
 
             fichas.append({
-                "clase": cls,
+                "clase": f["clase"],
                 "puntos": puntos,
-                "confianza": round(conf * 100, 1)
+                "confianza": round(f["conf"] * 100, 1)
             })
 
         return {
@@ -84,8 +140,13 @@ def calcular_puntos_domino(image_path):
         }
 
     except Exception as e:
-        print(f"❌ Error detección ONNX: {e}")
-        return {"total": 0, "cantidad": 0, "fichas": [], "error": str(e)}
+        return {
+            "total": 0,
+            "cantidad": 0,
+            "fichas": [],
+            "error": str(e)
+        }
+
 
 # ================== ROUTES ==================
 @app.route("/")
@@ -196,3 +257,4 @@ def health():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port)
+
