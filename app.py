@@ -6,7 +6,28 @@ import onnxruntime as ort
 app = Flask(__name__)
 
 session = ort.InferenceSession("model.onnx")
-input_name = session.get_inputs()[0].name
+input_name = session.get_inputs()[0].nameMODEL_PATH = os.environ.get("MODEL_PATH", "best.onnx")
+
+session = None
+input_name = None
+output_name = None
+
+print(f"🔧 Intentando cargar ONNX desde: {MODEL_PATH}")
+
+if os.path.exists(MODEL_PATH):
+    try:
+        session = ort.InferenceSession(
+            MODEL_PATH,
+            providers=["CPUExecutionProvider"]
+        )
+        input_name = session.get_inputs()[0].name
+        output_name = session.get_outputs()[0].name
+        print("✅ Modelo ONNX cargado correctamente")
+    except Exception as e:
+        print(f"❌ Error cargando ONNX: {e}")
+else:
+    print(f"❌ El archivo ONNX no existe: {MODEL_PATH}")
+
 
 
 @app.route("/add_match", methods=["POST"])
@@ -32,4 +53,5 @@ def add_match():
 
 if __name__ == "__main__":
     app.run(debug=True)
+
 
