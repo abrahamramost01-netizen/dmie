@@ -51,11 +51,8 @@ def preprocess(image_path):
 # ================= ROUTES =================
 @app.route("/")
 def index():
-    return {
-        "status": "ok",
-        "onnx_loaded": session is not None,
-        "model_path": MODEL_PATH
-    }
+    return render_template("index.html")
+
 
 @app.route("/raw_predict", methods=["POST"])
 def raw_predict():
@@ -97,4 +94,5 @@ def health():
 # ================= START =================
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
+
 
