@@ -1,18 +1,18 @@
-# Core (instalar primero)
+# --- Core ---
 Flask==3.0.0
-psycopg2-binary==2.9.9
 gunicorn==21.2.0
+psycopg2-binary==2.9.9
 
-# PyTorch CPU-only (separado para mejor cache)
+# --- PyTorch CPU ONLY (MUY IMPORTANTE) ---
 --find-links https://download.pytorch.org/whl/cpu/torch_stable.html
 torch==2.5.1+cpu
 torchvision==0.20.1+cpu
 
-# YOLO y visión
+# --- YOLO ---
 ultralytics==8.3.0
 opencv-python-headless==4.10.0.84
 
-# Utilidades básicas
+# --- Utils ---
 numpy==1.26.4
 pillow==10.1.0
 pyyaml
