@@ -1,18 +1,25 @@
-from flask import Flask, request, jsonify
-import numpy as np
+import os
+import uuid
 import cv2
+import numpy as np
 import onnxruntime as ort
+from flask import Flask, request, jsonify
+
+# ================= CONFIG =================
+UPLOAD_FOLDER = "uploads"
+MODEL_PATH = os.environ.get("MODEL_PATH", "best.onnx")
+IMG_SIZE = 640
+
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 app = Flask(__name__)
 
-session = ort.InferenceSession("model.onnx")
-input_name = session.get_inputs()[0].nameMODEL_PATH = os.environ.get("MODEL_PATH", "best.onnx")
-
+# ================= LOAD ONNX =================
 session = None
 input_name = None
 output_name = None
 
-print(f"🔧 Intentando cargar ONNX desde: {MODEL_PATH}")
+print(f"🔧 Intentando cargar ONNX: {MODEL_PATH}")
 
 if os.path.exists(MODEL_PATH):
     try:
@@ -22,36 +29,72 @@ if os.path.exists(MODEL_PATH):
         )
         input_name = session.get_inputs()[0].name
         output_name = session.get_outputs()[0].name
-        print("✅ Modelo ONNX cargado correctamente")
+        print("✅ ONNX cargado correctamente")
     except Exception as e:
-        print(f"❌ Error cargando ONNX: {e}")
+        print("❌ Error cargando ONNX:", e)
 else:
-    print(f"❌ El archivo ONNX no existe: {MODEL_PATH}")
+    print("❌ El archivo ONNX no existe")
 
+# ================= UTILS =================
+def preprocess(image_path):
+    img = cv2.imread(image_path)
+    if img is None:
+        raise ValueError("No se pudo leer la imagen")
 
+    img = cv2.resize(img, (IMG_SIZE, IMG_SIZE))
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    img = img.astype(np.float32) / 255.0
+    img = np.transpose(img, (2, 0, 1))
+    img = np.expand_dims(img, axis=0)
+    return img
 
-@app.route("/add_match", methods=["POST"])
-def add_match():
-    file = request.files["image"]
-    img = cv2.imdecode(
-        np.frombuffer(file.read(), np.uint8),
-        cv2.IMREAD_COLOR
-    )
+# ================= ROUTES =================
+@app.route("/")
+def index():
+    return {
+        "status": "ok",
+        "onnx_loaded": session is not None,
+        "model_path": MODEL_PATH
+    }
 
-    img_resized = cv2.resize(img, (640, 640))
-    img_input = img_resized.transpose(2, 0, 1)
-    img_input = img_input[np.newaxis, :].astype(np.float32) / 255.0
+@app.route("/raw_predict", methods=["POST"])
+def raw_predict():
+    if session is None:
+        return jsonify({"error": "Modelo ONNX no cargado"}), 500
 
-    output = session.run(None, {input_name: img_input})[0]
+    if "image" not in request.files:
+        return jsonify({"error": "No se envió imagen"}), 400
 
-    return jsonify({
-        "input_shape": list(img_input.shape),
-        "output_shape": list(output.shape),
-        "raw_output_sample": output[0][0][:50].tolist()
-    })
+    image = request.files["image"]
+    ext = os.path.splitext(image.filename)[1].lower()
+    name = f"{uuid.uuid4()}{ext}"
+    path = os.path.join(UPLOAD_FOLDER, name)
+    image.save(path)
 
+    try:
+        img_input = preprocess(path)
+        outputs = session.run([output_name], {input_name: img_input})
 
+        # DEVOLVEMOS TODO SIN TOCAR
+        return jsonify({
+            "image": name,
+            "output_shape": np.array(outputs[0]).shape,
+            "raw_output": outputs[0].tolist()
+        })
+
+    except Exception as e:
+        return jsonify({
+            "error": str(e)
+        }), 500
+
+@app.route("/health")
+def health():
+    return {
+        "status": "ok",
+        "onnx_loaded": session is not None
+    }
+
+# ================= START =================
 if __name__ == "__main__":
-    app.run(debug=True)
-
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
 
