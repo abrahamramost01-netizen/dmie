@@ -1,18 +1,19 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <title>YOLO Domino Test</title>
+    <meta charset="UTF-8">
+    <title>YOLO Raw Test</title>
 </head>
 <body>
 
-<h2>Test YOLO ONNX – Output crudo</h2>
+<h2>Prueba detección YOLO (output crudo)</h2>
 
 <form action="/detect" method="post" enctype="multipart/form-data">
-  <input type="file" name="image" required>
-  <button type="submit">Detectar</button>
+    <input type="file" name="image" required>
+    <button type="submit">Detectar</button>
 </form>
+
+<p>El resultado saldrá como JSON</p>
 
 </body>
 </html>
-
