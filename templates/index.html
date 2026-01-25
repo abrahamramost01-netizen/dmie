@@ -4,58 +4,53 @@
 <meta charset="UTF-8">
 <title>Dominó IA</title>
 <style>
-body { font-family: Arial; background:#f3f3f3; padding:20px }
-.card { background:white; padding:15px; margin-bottom:15px; border-radius:8px }
-img { max-width:300px; border-radius:6px }
+body{font-family:Arial;background:#f4f6fa;padding:20px}
+.card{background:#fff;padding:20px;border-radius:10px;margin-bottom:20px}
+img{max-width:100%;border-radius:10px}
+.ficha{display:inline-block;padding:8px 12px;border:1px solid #ddd;border-radius:6px;margin:5px}
 </style>
 </head>
 <body>
 
-<h1>🁢 Dominó – Puntaje Automático</h1>
+<h1>🁢 Dominó IA – Debug Visual</h1>
 
-<h2>Equipos</h2>
-{% for t in teams %}
 <div class="card">
-<b>{{ t[1] }}</b><br>
-Puntos: {{ t[2] }}
-{% if t[2] >= win_points %} 🏆{% endif %}
-</div>
-{% endfor %}
-
-<h2>Nuevo equipo</h2>
-<form method="post" action="/add_team">
-<input name="name" required>
-<button>Crear</button>
-</form>
-
-<h2>Nueva partida</h2>
+<h2>Registrar partida</h2>
 <form method="post" action="/add_match" enctype="multipart/form-data">
 <select name="team_id" required>
 {% for t in teams %}
-<option value="{{ t[0] }}">{{ t[1] }}</option>
+<option value="{{t[0]}}">{{t[1]}}</option>
 {% endfor %}
 </select><br><br>
-<input type="file" name="image" required><br><br>
-<button>Subir</button>
+<input type="file" name="image" required>
+<br><br>
+<button>Detectar</button>
 </form>
+</div>
 
-<h2>Historial</h2>
 {% for m in matches %}
+{% set d = m[3] | tojson | loads %}
 <div class="card">
-<b>{{ m[1] }}</b> +{{ m[2] }} pts<br>
+<h3>{{m[1]}} → +{{m[2]}} pts</h3>
 
-{% if m[3] %}
-<img src="{{ url_for('uploads', filename=m[3].split('/')[-1]) }}">
+{% if d.imagen_resultado %}
+<img src="{{ url_for('results', filename=d.imagen_resultado) }}">
 {% endif %}
 
-{% if m[4] %}
-<p>Fichas: {{ m[4].cantidad }}</p>
-<p>Total: {{ m[4].total }}</p>
-{% endif %}
+<p><b>Fichas detectadas:</b> {{d.cantidad}}</p>
+
+{% for f in d.fichas %}
+<div class="ficha">
+🁣 {{f.puntos}} pts<br>
+🎯 {{f.confianza}}%
+</div>
+{% endfor %}
+
 </div>
 {% endfor %}
 
 </body>
 </html>
+
 
 
