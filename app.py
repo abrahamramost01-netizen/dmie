@@ -2,60 +2,92 @@ import os
 import uuid
 import json
 import psycopg2
-from flask import Flask, render_template, request, redirect, url_for, send_from_directory
-from ultralytics import YOLO
+import cv2
+import numpy as np
+import onnxruntime as ort
 
-# ================= CONFIG =================
+from flask import Flask, render_template, request, redirect, url_for, send_from_directory
+
+# ================== CONFIG ==================
 UPLOAD_FOLDER = "uploads"
+MODEL_PATH = os.environ.get("MODEL_PATH", "best.onnx")
 WIN_POINTS = int(os.environ.get("WIN_POINTS", 200))
-MODEL_PATH = os.environ.get("MODEL_PATH", "best.pt")
-DATABASE_URL = os.environ.get("DATABASE_URL")
+CONF_THRESHOLD = 0.5
+IMG_SIZE = 640
 
 app = Flask(__name__)
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# ================= LOAD YOLO =================
-print(f"🔧 Loading YOLO model: {MODEL_PATH}")
-try:
-    model = YOLO(MODEL_PATH)
-    print("✅ YOLO model loaded")
-except Exception as e:
-    print(f"❌ YOLO load failed: {e}")
-    model = None
+# ================== DATABASE ==================
+DATABASE_URL = os.environ.get("DATABASE_URL")
 
-# ================= DB =================
 def get_db():
     return psycopg2.connect(DATABASE_URL, sslmode="require")
 
-# ================= YOLO LOGIC =================
+# ================== LOAD ONNX MODEL ==================
+print(f"🔧 Cargando modelo ONNX: {MODEL_PATH}")
+
+try:
+    session = ort.InferenceSession(
+        MODEL_PATH,
+        providers=["CPUExecutionProvider"]
+    )
+    input_name = session.get_inputs()[0].name
+    output_name = session.get_outputs()[0].name
+    print("✅ Modelo ONNX cargado correctamente")
+except Exception as e:
+    print(f"❌ Error cargando ONNX: {e}")
+    session = None
+
+# ================== YOLO ONNX UTILS ==================
+def preprocess(image_path):
+    img = cv2.imread(image_path)
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    img = cv2.resize(img, (IMG_SIZE, IMG_SIZE))
+    img = img.astype(np.float32) / 255.0
+    img = np.transpose(img, (2, 0, 1))
+    img = np.expand_dims(img, axis=0)
+    return img
+
 def calcular_puntos_domino(image_path):
-    if model is None:
-        return {"total": 0, "cantidad": 0, "fichas": []}
+    if session is None:
+        return {"total": 0, "cantidad": 0, "fichas": [], "error": "Modelo no cargado"}
 
-    results = model(image_path, conf=0.5, verbose=False)
+    try:
+        img = preprocess(image_path)
+        outputs = session.run([output_name], {input_name: img})[0]
 
-    total = 0
-    fichas = []
+        fichas = []
+        total = 0
 
-    for r in results:
-        for box in r.boxes:
-            cls = int(box.cls.item())
-            conf = float(box.conf.item())
-            puntos = cls  # Ajusta si tu dataset usa otro mapping
+        # YOLOv8 output: (1, N, 6) → x, y, w, h, conf, class
+        for det in outputs[0]:
+            conf = float(det[4])
+            cls = int(det[5])
+
+            if conf < CONF_THRESHOLD:
+                continue
+
+            puntos = cls  # clase = puntos
+            total += puntos
 
             fichas.append({
+                "clase": cls,
                 "puntos": puntos,
                 "confianza": round(conf * 100, 1)
             })
-            total += puntos
 
-    return {
-        "total": total,
-        "cantidad": len(fichas),
-        "fichas": fichas
-    }
+        return {
+            "total": total,
+            "cantidad": len(fichas),
+            "fichas": fichas
+        }
 
-# ================= ROUTES =================
+    except Exception as e:
+        print(f"❌ Error detección ONNX: {e}")
+        return {"total": 0, "cantidad": 0, "fichas": [], "error": str(e)}
+
+# ================== ROUTES ==================
 @app.route("/")
 def index():
     conn = get_db()
@@ -97,6 +129,17 @@ def add_team():
 
     return redirect(url_for("index"))
 
+@app.route("/delete_team", methods=["POST"])
+def delete_team():
+    team_id = int(request.form.get("team_id"))
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM teams WHERE id = %s", (team_id,))
+    conn.commit()
+    cur.close()
+    conn.close()
+    return redirect(url_for("index"))
+
 @app.route("/add_match", methods=["POST"])
 def add_match():
     team_id = int(request.form.get("team_id"))
@@ -106,7 +149,7 @@ def add_match():
         return redirect(url_for("index"))
 
     ext = os.path.splitext(image.filename)[1].lower()
-    if ext not in {".jpg", ".jpeg", ".png"}:
+    if ext not in [".jpg", ".jpeg", ".png"]:
         return redirect(url_for("index"))
 
     filename = f"{uuid.uuid4()}{ext}"
@@ -114,8 +157,6 @@ def add_match():
     image.save(path)
 
     resultado = calcular_puntos_domino(path)
-    points = resultado["total"]
-    details_json = json.dumps(resultado)
 
     conn = get_db()
     cur = conn.cursor()
@@ -123,11 +164,16 @@ def add_match():
     cur.execute("""
         INSERT INTO matches (team_id, points, image_path, details)
         VALUES (%s, %s, %s, %s)
-    """, (team_id, points, path, details_json))
+    """, (
+        team_id,
+        resultado["total"],
+        path,
+        json.dumps(resultado)
+    ))
 
     cur.execute("""
         UPDATE teams SET points = points + %s WHERE id = %s
-    """, (points, team_id))
+    """, (resultado["total"], team_id))
 
     conn.commit()
     cur.close()
@@ -143,11 +189,10 @@ def uploads(filename):
 def health():
     return {
         "status": "ok",
-        "model_loaded": model is not None
+        "onnx_loaded": session is not None
     }
 
-# ================= MAIN =================
+# ================== START ==================
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port)
-
