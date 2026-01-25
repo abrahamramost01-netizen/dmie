@@ -1,32 +1,41 @@
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
-  <meta charset="utf-8">
-  <title>Domino Debug</title>
+    <meta charset="UTF-8">
+    <title>YOLO Raw Test</title>
 </head>
 <body>
-  <h2>Subir imagen</h2>
+    <h2>Test detección cruda</h2>
 
-  <form id="f">
-    <input type="file" name="image" required>
-    <button>Enviar</button>
-  </form>
+    <form id="form">
+        <input type="file" name="image" required>
+        <button type="submit">Enviar</button>
+    </form>
 
-  <pre id="out"></pre>
-  <img id="img" style="max-width:600px">
+    <pre id="json"></pre>
+    <img id="img" style="max-width:600px">
 
-  <script>
-    document.getElementById("f").onsubmit = async e => {
-      e.preventDefault();
-      const fd = new FormData(e.target);
-      const r = await fetch("/infer", { method:"POST", body:fd });
-      const j = await r.json();
-      document.getElementById("out").textContent = JSON.stringify(j, null, 2);
-      if (j.image) {
-        document.getElementById("img").src = "/processed/" + j.image;
-      }
-    };
-  </script>
+    <script>
+        const form = document.getElementById("form");
+        form.onsubmit = async e => {
+            e.preventDefault();
+            const data = new FormData(form);
+
+            const res = await fetch("/detect", {
+                method: "POST",
+                body: data
+            });
+
+            const json = await res.json();
+            document.getElementById("json").textContent =
+                JSON.stringify(json, null, 2);
+
+            if (json.image) {
+                document.getElementById("img").src =
+                    "/static/out/" + json.image;
+            }
+        };
+    </script>
 </body>
 </html>
 
